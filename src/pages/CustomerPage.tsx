@@ -1,0 +1,371 @@
+import {Search,Plus, X, Pencil, Trash2} from "lucide-react";
+import {useState, useEffect} from "react";
+import type {Customer} from "../types/customer";
+
+const CUSTOMER_STORAGE_KEY = "restaurant_customers";
+
+const initialCustomers : Customer[] = [
+     {
+    id: "1",
+    name: "Rahul Sharma",
+    email: "rahul@gmail.com",
+    phone: "9876543210",
+    totalOrders: 12,
+    totalSpent: 4560,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "2",
+    name: "Priya Patel",
+    email: "priya@gmail.com",
+    phone: "9876543211",
+    totalOrders: 8,
+    totalSpent: 3240,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "3",
+    name: "Amit Kumar",
+    email: "amit@gmail.com",
+    phone: "9876543212",
+    totalOrders: 5,
+    totalSpent: 1860,
+    createdAt: new Date().toISOString(),
+  },
+];
+
+const CustomerPage = () => {
+
+    const [name,setName] =useState("");
+    const [email,setEmail] =useState("");
+    const [phone,setPhone] = useState("");
+    const[customers, setCustomers] = useState<Customer[]>(() => {
+        const storedCustomers = localStorage.getItem(CUSTOMER_STORAGE_KEY);
+
+        if(storedCustomers) {
+            return JSON.parse(storedCustomers);
+        }
+        return initialCustomers;
+    });
+
+    const [search,setSearch] = useState("");
+    const [ showForm, setShowForm] = useState(false);
+    const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+
+    useEffect(() => {
+        localStorage.setItem(
+            CUSTOMER_STORAGE_KEY,
+            JSON.stringify(customers)
+        );
+    },[customers])
+
+    const filteredCustomers = customers.filter((customer) => 
+    customer.name.toLowerCase().includes(search.toLowerCase()) ||
+    customer.email.toLowerCase().includes(search.toLowerCase()) || 
+    customer.phone.includes(search)
+   );
+
+   const handleSubmitCustomer = (e:React.FormEvent) => {
+    e.preventDefault();
+
+    if(!name.trim() || !email.trim() || !phone.trim()) {
+        return;
+    }
+
+    if(editingCustomer) {
+        const updatedCustomer: Customer = {
+            ...editingCustomer,
+            name:name.trim(),
+            email:email.trim(),
+            phone:phone.trim(),
+        };
+
+        setCustomers((prev) => 
+        prev.map((customer) => 
+        customer.id === updatedCustomer.id
+        ? updatedCustomer
+        :customer))
+
+        setEditingCustomer(null);
+    }else{
+    const newCustomer : Customer ={
+        id: crypto.randomUUID(),
+        name:name.trim(),
+        email:email.trim(),
+        phone:phone.trim(),
+        totalOrders:0,
+        totalSpent:0,
+        createdAt :new Date().toISOString(),
+    };
+
+    setCustomers((prev) => [...prev, newCustomer]);
+
+    setName("");
+    setEmail("");
+    setPhone("");
+    setShowForm(false);
+   };
+};
+
+   const handleDeleteCustomer = (customerId: string) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this customer?"
+  );
+
+  if (!confirmed) return;
+
+  setCustomers((prev) =>
+    prev.filter((customer) => customer.id !== customerId)
+  );
+};
+
+   return(
+
+    <div className="space-y-6">
+
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+
+        <div>
+
+            <h1 className="text-2xl font-bold text-slate-900">
+                Customers
+            </h1>
+
+            <p className="mt-1 text-sm text-slate-500">
+                Manage your restaurant customers
+            </p>
+        </div>
+
+        <button type="submit"
+        onClick={() => {
+            setEditingCustomer(null);
+            setName("");
+            setEmail("");
+            setPhone("");
+            setShowForm(true)}}
+        className="flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-orange-700">
+            <Plus size={18}/>
+            {editingCustomer ? "UpdateCustomer" : "Add Customer"}
+        </button>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+
+            <div className="relative max-w-md">
+
+                <Search size={18}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+
+                <input
+                type="text"
+                placeholder="Search customers..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"/>
+            </div>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+
+            <div className="overflow-x-auto">
+
+                <table className="w-full min-w-225">
+
+                    <thead className="border-b border-slate-200 bg-slate-50">
+                        <tr>
+
+                            <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
+                                Customer
+                            </th>
+
+                            <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
+                                Phone
+                            </th>
+
+                            <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
+                               Orders
+                            </th>
+
+                            <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
+                               Total Spent
+                            </th>
+
+                            <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody className="divide-y divide-slate=100">
+
+                        {filteredCustomers.map((customer) => (
+
+                            <tr key={customer.id}
+                            className="transition hover:bg-slate-50">
+
+                                <td className="px-6 py-4">
+
+                                    <p className="font-medium text-slate-900">
+                                        {customer.name}
+                                    </p>
+
+                                    <p className="mt-1 text-xs text-slate-400">
+                                        {customer.email}
+                                    </p>
+                                </td>
+
+                                <td className="px-6 py-4 text-sm text-slate-600">
+                                    {customer.phone}
+                                </td>
+
+                                <td className="px-6 py-4 text-sm font-medium text-slate-700">
+                                    {customer.totalOrders}
+                                </td>
+
+                                <td className="px-6 py-4 text-sm font-semibold text-slate-900">
+                                    ₹{customer.totalSpent}
+                                </td>
+
+                                <td className="px-6 py-4 text-left">
+                                    <div className="flex items-center gap-2">
+                                    <button
+                                    type="button"
+                                    onClick={() => {
+                                        setEditingCustomer(customer);
+                                        setName(customer.name);
+                                        setEmail(customer.email);
+                                        setPhone(customer.phone);
+                                    }}
+                                    className="rounded-lg px-3 py-2 text-sm font-medium text-orange-600 transition hover:bg-orange-50"
+                                        title="Edit Customer">
+                                        <Pencil size={18}/>
+                                    </button>
+
+                                    <button 
+                                    type="button"
+                                    onClick={() => handleDeleteCustomer(customer.id)}
+                                    className="rounded-lg p-2 text-red-600 transition hover:bg-red-50"
+                                    title="Delete Customer">
+                                        <Trash2 size={18}/>
+                                    </button>
+                                </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {filteredCustomers.length === 0 && (
+                <div className="py-12 text-center text-sm text-slate-400">
+                    No customer found
+                </div>
+            )}
+        </div>
+
+        {(showForm || editingCustomer)  && (
+            <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
+            onClick={() => {
+                setShowForm(false);
+                setEditingCustomer(null)}}>
+                
+                <div
+                className="w-full max-w-lg rounded-xl bg-white shadow-2xl"
+                onClick={(e) => e.stopPropagation()}>
+
+                    <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+
+                     <div>
+                        <h2 className="text-lg font-semibold text-slate-900">
+                           {editingCustomer ? "Edit Customer" : "Add Customer"}
+                        </h2>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                           { editingCustomer ? "updated customer information" : "Add a new restaurant customer"}
+                        </p>
+                    </div>
+
+                    <button
+                    type="button"
+                    onClick={() => {
+                    setShowForm(false)
+                    setEditingCustomer(null)}}
+                    className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                    <X size={20} />
+                    </button>
+
+                </div>
+
+                <form
+                onSubmit={handleSubmitCustomer}
+                 className="space-y-5 p-6">
+
+                   <div>
+                       <label className="mb-2 block text-sm font-medium text-slate-700">
+                            Name
+                        </label>
+
+                        <input
+                        type="text"
+                        value={name}
+                        placeholder="Enter customer name"
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"/>
+                    </div>
+
+                    <div>
+                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                            Email
+                        </label>
+
+                        <input
+                        type="email"
+                        value={email}
+                        placeholder="Enter customer email"
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                            Phone
+                        </label>
+
+                        <input
+                        type="tel"
+                        value={phone}
+                        placeholder="Enter phone number"
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"/>
+                  </div>
+
+                    <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
+
+                    <button
+                    type="button"
+                    onClick={() => {
+                    setShowForm(false)
+                    setEditingCustomer(null)}}
+                    className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                      Cancel
+                    </button>
+
+                    <button
+                    type="submit"
+                    className="rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-700">
+                        Add Customer
+                    </button>
+
+                   </div>
+
+                </form>
+
+            </div>
+        </div>
+    )}
+    </div>
+   );
+};
+export default CustomerPage;
