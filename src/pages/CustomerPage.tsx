@@ -1,4 +1,4 @@
-import {Search,Plus, X, Pencil, Trash2} from "lucide-react";
+import {Search,Plus, X} from "lucide-react";
 import {useState, useEffect} from "react";
 import type {Customer} from "../types/customer";
 
@@ -51,6 +51,8 @@ const CustomerPage = () => {
     const [search,setSearch] = useState("");
     const [ showForm, setShowForm] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+    const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
+    const [openActionsId, setOpenActionsId] = useState<string | null>(null);
 
     useEffect(() => {
         localStorage.setItem(
@@ -227,28 +229,56 @@ const CustomerPage = () => {
                                 </td>
 
                                 <td className="px-6 py-4 text-left">
-                                    <div className="flex items-center gap-2">
-                                    <button
-                                    type="button"
-                                    onClick={() => {
-                                        setEditingCustomer(customer);
-                                        setName(customer.name);
-                                        setEmail(customer.email);
-                                        setPhone(customer.phone);
-                                    }}
-                                    className="rounded-lg px-3 py-2 text-sm font-medium text-orange-600 transition hover:bg-orange-50"
-                                        title="Edit Customer">
-                                        <Pencil size={18}/>
-                                    </button>
+                                    <div className="relative">
 
-                                    <button 
-                                    type="button"
-                                    onClick={() => handleDeleteCustomer(customer.id)}
-                                    className="rounded-lg p-2 text-red-600 transition hover:bg-red-50"
-                                    title="Delete Customer">
-                                        <Trash2 size={18}/>
-                                    </button>
-                                </div>
+                                        <button type="button"
+                                        onClick = {() => 
+                                            setOpenActionsId(
+                                                openActionsId === customer.id ? null :customer.id
+                                            )
+                                        }
+                                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                                            Actions
+                                        </button>
+
+                                        {openActionsId === customer.id && (
+                                            <div className="absolute right-0 z-10 mt-2 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+
+                                           <button 
+                                           type="button"
+                                           onClick={() => {
+                                            setViewingCustomer(customer);
+                                            setOpenActionsId(null);
+                                           }} 
+                                           className="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                                            View Details
+                                            </button>  
+
+                                            <button 
+                                            type="button"
+                                            onClick={() => {
+                                                setEditingCustomer(customer);
+                                                setName(customer.name);
+                                                setEmail(customer.email)
+                                                setPhone(customer.phone);
+                                                setOpenActionsId(null);
+                                            }}  
+                                            className="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                                                Edit
+                                            </button>
+
+                                            <button
+                                            type="button"
+                                            onClick={() => {
+                                                handleDeleteCustomer(customer.id);
+                                                setOpenActionsId(null);
+                                            }}
+                                            className="block w-fu;; px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50">
+                                                Delete
+                                            </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ))}
@@ -362,6 +392,99 @@ const CustomerPage = () => {
 
                 </form>
 
+            </div>
+        </div>
+    )}
+
+    {viewingCustomer && (
+        <div className="fixed inset-0 x-50 flex items-center justify-center bg-slate-900/50 p-4"
+        onClick = {() => setViewingCustomer(null)}>
+
+            <div className = "w-full max-w-lg rounded-xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+
+                <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+
+                    <div>
+                        <h2 className="text-lg font-semibold text-slate-900" >
+                            Customer Details
+                        </h2>
+                         
+                        <p className="mt-1 text-sm text-slate-500">
+                            Customer information
+                        </p>
+                    </div>
+
+                    <button
+                    type="button"
+                    onClick={() => setViewingCustomer(null)}
+                    className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
+                        <X size = {20}/>
+                    </button>
+                </div>
+
+                <div className="space-y-4 p-6">
+
+                    <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">
+                            Name
+                        </span>
+
+                        <span className="text-sm font-medium text-slate-900">
+                            {viewingCustomer.name}
+                        </span>
+                    </div>
+
+                    <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">
+                            Email
+                        </span>
+
+                        <span className="text-sm font-medium text-slate-900">
+                            {viewingCustomer.email}
+                        </span>
+                    </div>
+
+                    <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">
+                            Phone
+                        </span>
+
+                        <span className="text-sm font-medium text-slate-900">
+                            {viewingCustomer.phone}
+                        </span>
+                    </div>
+
+                    <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">
+                            Total Orders
+                        </span>
+
+                        <span className="text-sm font-medium text-slate-900">
+                            {viewingCustomer.totalOrders}
+                        </span>
+                    </div>
+
+                    <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">
+                            Total Spent
+                        </span>
+
+                        <span className="text-sm font-semibold text-orange-600">
+                             ₹{viewingCustomer.totalSpent}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="flex justify-end border-t border-slate-100 px-6 py-4">
+
+                    <button 
+                    type="button"
+                    onClick={() => setViewingCustomer(null)}
+                    className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800">
+                        Close
+                    </button>
+                </div>
             </div>
         </div>
     )}
