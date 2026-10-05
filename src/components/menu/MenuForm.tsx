@@ -1,15 +1,16 @@
 import {useState} from "react";
 import {X} from "lucide-react";
 import type {MenuCategory, MenuItem} from "../../types/menu";
+import {createRecordId} from "../../utils/recordIds";
 
 interface MenuFormProps{
     onClose: () => void;
     onSubmit: (item: MenuItem) => void;
-    initialItem?: MenuItem;
+    initialItem ?: MenuItem;
 }
 
 const MenuForm = ({onClose, onSubmit, initialItem,} : MenuFormProps) => {
-    const[name, setName] = useState(initialItem?.name ?? "");
+    const[name, setName] = useState(initialItem ?.name ?? "");
     const[description, setDescription] = useState(initialItem?.description ??"");
     const[price, setPrice] = useState(initialItem?.price.toString() ??"");
     const[category, setCategory] = useState<MenuCategory>(initialItem?.category ??"Starters");
@@ -22,7 +23,7 @@ const MenuForm = ({onClose, onSubmit, initialItem,} : MenuFormProps) => {
         }
 
         const newItem:MenuItem = {
-            id:initialItem?.id ?? crypto.randomUUID(),
+            id:initialItem?.id ?? createRecordId("MENU"),
             name: name.trim(),
             description:description.trim(),
             price:Number(price),
@@ -35,9 +36,9 @@ const MenuForm = ({onClose, onSubmit, initialItem,} : MenuFormProps) => {
     return(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
 
-            <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
+            <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
                 
-                <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+                <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-5">
 
                     <div>
                         <h2 className="text-lg font-semibold text-slate-900">
@@ -59,7 +60,8 @@ const MenuForm = ({onClose, onSubmit, initialItem,} : MenuFormProps) => {
 
                 <form
                 onSubmit={handleSubmit}
-                className="space-y-5 p-6">
+                className="flex min-h-0 flex-1 flex-col">
+                    <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
                     <div>
                         <label className="mb-2 block text-sm font-medium text-slate-700">
                             Item Name
@@ -119,7 +121,8 @@ const MenuForm = ({onClose, onSubmit, initialItem,} : MenuFormProps) => {
                             </div>
                         </div>
 
-                        <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4">
+                    </div>
+                        <div className="flex shrink-0 justify-end gap-3 border-t border-slate-100 px-6 py-4">
 
                             <button
                             type="button"

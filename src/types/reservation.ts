@@ -12,6 +12,7 @@ export interface Reservation {
     time : string;
     guests : number;
     tableNumber : number;
+    tableSection: string;
     status : ReservationStatus;
     createdAt : string;
 }

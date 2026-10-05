@@ -1,39 +1,40 @@
 import {createContext,useContext,useEffect,useState }from "react";
 import type { RestaurantTable, TableStatus} from "../types/table";
+import {normalizeRecordId} from "../utils/recordIds";
 
 const TABLE_STORAGE_KEY = "restaurant_tables";
 
 const initialTables:RestaurantTable[]=[
     {
-    id: "1",
+    id: "TABLE-1",
     tableNumber: 1,
     capacity: 2,
     section: "Indoor",
     status: "Available",
   },
   {
-    id: "2",
+    id: "TABLE-2",
     tableNumber: 2,
     capacity: 4,
     section: "Indoor",
     status: "Occupied",
   },
   {
-    id: "3",
+    id: "TABLE-3",
     tableNumber: 3,
     capacity: 4,
     section: "Outdoor",
     status: "Reserved",
   },
   {
-    id: "4",
+    id: "TABLE-4",
     tableNumber: 4,
     capacity: 6,
     section: "Indoor",
     status: "Available",
   },
   {
-    id: "5",
+    id: "TABLE-5",
     tableNumber: 5,
     capacity: 8,
     section: "Private",
@@ -66,7 +67,11 @@ export const TableProvider = ({
         const storedTables = localStorage.getItem(TABLE_STORAGE_KEY);
 
         if(storedTables) {
-            return JSON.parse(storedTables);
+            const parsedTables = JSON.parse(storedTables) as RestaurantTable[];
+            return parsedTables.map((table) => ({
+                ...table,
+                id: normalizeRecordId(table.id, "TABLE"),
+            }));
         }
         return initialTables;
     });
@@ -75,8 +80,11 @@ export const TableProvider = ({
         localStorage.setItem(TABLE_STORAGE_KEY, JSON.stringify(tables))
     },[tables]);
 
-    const addTable = (table:RestaurantTable) => {
-        setTables((prev) => [...prev,table]);
+    const addTable = (table:RestaurantTable) => {  
+        setTables((prev) => [
+            ...prev,
+            {...table, id: normalizeRecordId(table.id, "TABLE")},
+        ]);
     }
 
     const updateTable = (updatedTable:RestaurantTable) => {

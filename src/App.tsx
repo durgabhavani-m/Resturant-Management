@@ -1,43 +1,92 @@
 import {Routes,Route,Navigate} from "react-router-dom";
+
 import Layout from "./components/layout/Layout";
+import ProtectedRoute from "./components/ProtectedRoute";
+
 import Dashboard from "./components/dashboard/Dashboard";
-import MenuPage from "./pages/MenuPage";
+import MenuPage from "./components/MenuPage";
 import LoginPage from "./pages/LoginPage";
-import OrdersPage from "./pages/OrdersPage";
-import CustomerPage from "./pages/CustomerPage";
-import ReservationsPage from "./pages/ReservationsPage";
-import TablesPage from "./pages/TablesPage";
-import { TableProvider} from "./context/TableContext";
+import OrdersPage from "./components/OrdersPage";
+import CustomerPage from "./components/CustomerPage";
+import ReservationsPage from "./components/ReservationsPage";
+import TablesPage from "./components/TablesPage";
+import TableOrderPage from "./components/TableOrderPage";
+import StaffPage from "./components/StaffPage";
+import BillingPage from "./components/BillingPage";
+import SettingsPage from "./components/SettingsPage";
+
+import { TableProvider } from "./context/TableContext";
+import { OrderProvider } from "./context/OrderContext";
+import { MenuProvider } from "./context/MenuContext";
+import { BillingProvider} from "./context/BillingContext";
+import { StaffProvider } from "./context/StaffContext";
+import { AuthProvider } from "./context/AuthContext";
+import { RestaurantProvider } from "./context/ResturantContext";
 
 function App () {
     return (
-
+    <AuthProvider>
         <TableProvider>
+            <OrderProvider>
+                <MenuProvider>
+                    <StaffProvider>
+                        <BillingProvider>
+                        <RestaurantProvider>
+          
+                        <Routes>
 
-        <Routes>
+                        <Route path="/login" element={<LoginPage/>}/>
 
-            <Route path="/login" element={<LoginPage/>}/>
+                        <Route element={<Layout/>}>
+                        
+                        <Route element={<ProtectedRoute permission="dashboard"/>}>
+                        <Route path="/dashboard" element={<Dashboard/>}/>
+                        </Route>
+                        
+                        <Route element={<ProtectedRoute permission="menu"/>}>
+                        <Route path="/menu" element={<MenuPage/>}/>
+                        </Route>
 
-            <Route element={<Layout/>}>
+                        <Route element={<ProtectedRoute permission="orders"/>}>
+                        <Route path="/orders" element={<OrdersPage/>}/>
+                        </Route>
 
-            <Route path="/dashboard" element={<Dashboard/>}/>
-            
-            <Route path="/menu" element={<MenuPage/>}/>
+                        <Route element={<ProtectedRoute permission="billing"/>}>
+                        <Route path="/billing" element={<BillingPage/>}/>
+                        </Route>
+                        
+                        <Route element={<ProtectedRoute permission="customers"/>}>
+                        <Route path="/customers" element={<CustomerPage/>}/>
+                        </Route>
+                        
+                        <Route element={<ProtectedRoute permission="reservations"/>}>
+                        <Route path="/reservations" element={<ReservationsPage/>}/>
+                        </Route>
+                        
+                        <Route element={<ProtectedRoute permission="tables"/>}>
+                        <Route path="/tables" element={<TablesPage/>}/>
+                        </Route>
+                        
+                        <Route path="/tables/:tableId/order" element={<TableOrderPage/>}/>
 
-            <Route path="/orders" element={<OrdersPage/>}/>
+                        <Route element={<ProtectedRoute permission="staff"/>}>
+                        <Route path="/staff" element={<StaffPage />} />
+                        </Route>
 
-            <Route path="/customers" element={<CustomerPage/>}/>
+                        <Route element={<ProtectedRoute permission="settings"/>}>
+                        <Route path="/settings" element={<SettingsPage />} />
+                        </Route>
+                        
+                        <Route path="/" element={<Navigate to ="/login" replace/>}/></Route>
 
-            <Route path="/reservations" element={<ReservationsPage/>}/>
-
-            <Route path="/tables" element={<TablesPage/>}/>
-
-            <Route path="/" element={<Navigate to ="/dashboard" replace/>}/>
-
-            </Route>
-        </Routes>
-
+                        </Routes>
+                                                </RestaurantProvider>
+                                            </BillingProvider>  
+                    </StaffProvider>
+                </MenuProvider>
+            </OrderProvider>
         </TableProvider>
+    </AuthProvider>
     )
 }
 export default App;

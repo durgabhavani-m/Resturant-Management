@@ -7,6 +7,7 @@ import {
 }from "react";
 
 import type {MenuItem} from "../types/menu";
+import {normalizeRecordId} from "../utils/recordIds";
 
 interface MenuContextType{
     items:MenuItem[];
@@ -25,7 +26,7 @@ const STORAGE_KEY = "restaurant_menu";
 
 const initialItems:MenuItem[] = [
     {
-    id: "1",
+    id: "MENU-1",
     name: "Paneer Tikka",
     description: "Grilled cottage cheese with spices",
     price: 280,
@@ -33,7 +34,7 @@ const initialItems:MenuItem[] = [
     available: true,
   },
   {
-    id: "2",
+    id: "MENU-2",
     name: "Butter Chicken",
     description: "Chicken cooked in creamy tomato gravy",
     price: 420,
@@ -41,7 +42,7 @@ const initialItems:MenuItem[] = [
     available: true,
   },
   {
-    id: "3",
+    id: "MENU-3",
     name: "Gulab Jamun",
     description: "Traditional Indian sweet",
     price: 120,
@@ -55,7 +56,11 @@ export const MenuProvider = ({children,}:{children:ReactNode;}) => {
         const storedItems = localStorage.getItem(STORAGE_KEY);
 
         if (storedItems) {
-            return JSON.parse(storedItems);
+            const parsedItems = JSON.parse(storedItems) as MenuItem[];
+            return parsedItems.map((item) => ({
+                ...item,
+                id: normalizeRecordId(item.id, "MENU"),
+            }));
         }
         return initialItems;
     });
@@ -68,7 +73,10 @@ export const MenuProvider = ({children,}:{children:ReactNode;}) => {
     },[items]);
 
     const addItem = (item:MenuItem) => {
-        setItems((prev) => [...prev,item]);
+        setItems((prev) => [
+            ...prev,
+            {...item, id: normalizeRecordId(item.id, "MENU")},
+        ]);
     };
 
     const updateItem = (updatedItem:MenuItem) => {

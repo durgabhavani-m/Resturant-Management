@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Plus, Search } from "lucide-react";
 
-import MenuTable from "../components/menu/MenuTable";
-import MenuForm from "../components/menu/MenuForm";
+import MenuTable from "./menu/MenuTable";
+import MenuForm from "./menu/MenuForm";
 import type {MenuCategory} from "../types/menu";
 import { useMenu } from "../context/MenuContext";
 import type { MenuItem } from "../types/menu";
@@ -49,7 +49,7 @@ const MenuPage = () => {
 
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-6">
 
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
 
@@ -101,9 +101,10 @@ const MenuPage = () => {
         }
         className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100">
 
-            <option value = "All">All Categories</option>
+            <option value="All">All Categories</option>
             <option value="Starters">Starters</option>
-            <option value="Main Course">Desserts</option>
+            <option value="Main Course">Main Course</option>
+            <option value="Desserts">Desserts</option>
             <option value="Beverages">Beverages</option>
         </select>
     </div>

@@ -1,41 +1,48 @@
 import {Search, Plus, X, MoreHorizontal} from "lucide-react";
-import {useState, useEffect, useRef} from "react";
+import {useState, useEffect} from "react";
 import type {Reservation,ReservationStatus} from "../types/reservation";
 import {useTable} from "../context/TableContext";
+import {useOrder} from "../context/OrderContext";
+import {useBilling} from "../context/BillingContext";
+import {createRecordId, normalizeRecordId} from "../utils/recordIds";
 
 const RESERVATION_STORAGE_KEY = "reservation_customers";
+const TABLE_NOTICE_STORAGE_KEY = "restaurant_table_notice";
 
 const initialReservations: Reservation[] = [
   {
-    id: "1",
+    id: "RESERVATION-1",
     customerName: "Rahul Sharma",
     phone: "9876543210",
     date: "2026-08-31",
     time: "19:00",
     guests: 4,
     tableNumber: 5,
+    tableSection: "Indoor",
     status: "Confirmed",
     createdAt: new Date().toISOString(),
   },
   {
-    id: "2",
+    id: "RESERVATION-2",
     customerName: "Priya Patel",
     phone: "9876543211",
     date: "2026-09-01",
     time: "20:00",
     guests: 2,
     tableNumber: 3,
+    tableSection: "Outdoor",
     status: "Pending",
     createdAt: new Date().toISOString(),
   },
   {
-    id: "3",
+    id: "RESERVATION-3",
     customerName: "Amit Kumar",
     phone: "9876543212",
     date: "2026-09-02",
     time: "18:30",
     guests: 6,
     tableNumber: 8,
+    tableSection: "Private",
     status: "Completed",
     createdAt: new Date().toISOString(),
   },
@@ -43,13 +50,19 @@ const initialReservations: Reservation[] = [
 
 const Reservationspage = () => {
     const{tables,updateTableStatus} = useTable();
+    const {orders} = useOrder();
+    const {bills} = useBilling();
     const [search, setSearch] =useState("");
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [reservation, setReservation] = useState<Reservation[]>(() => {
         const storedReservation = localStorage.getItem(RESERVATION_STORAGE_KEY);
 
         if(storedReservation) {
-            return JSON.parse(storedReservation)
+            const parsedReservations = JSON.parse(storedReservation) as Reservation[];
+            return parsedReservations.map((item) => ({
+                ...item,
+                id: normalizeRecordId(item.id, "RESERVATION"),
+            }));
         }
         return initialReservations;
     });
@@ -63,63 +76,82 @@ const Reservationspage = () => {
     const [time, setTime] = useState("");
     const [guests, setGuests] = useState("");
     const [tableNumber, setTableNumber] =useState("");
+    const [tableSection, setTableSection] = useState("");
     const [reservationMessage, setReservationMessage] = useState<{
         type: "success" | "error";
-        message:String;
+        message:string;
     } | null>(null);
-    const previousTablesRef = useRef(tables);
-      
-    const availableTables = tables.filter((table) => {
-        const isCurrentTable = editingReservation?.tableNumber === table.tableNumber;
-        const isAvailable = table.status === "Available";
-        const hasCapacity = guests
-        ? table.capacity >= Number(guests)
-        : true;
-
-        return (isAvailable || isCurrentTable) && hasCapacity;
-    })
-
-    console.log("All TABLES:",tables);
-    console.log("AVAILABLE TABLES:",availableTables);
+    const selectableTables = tables.filter((table) =>
+        !guests || table.capacity >= Number(guests)
+    );
 
     useEffect(() => {
         localStorage.setItem(RESERVATION_STORAGE_KEY,JSON.stringify(reservation))
     },[reservation]);
-useEffect(() => {
-    const previousTables = previousTablesRef.current;
+    useEffect(() => {
+        const tablesBeingReserved = new Set<string>();
+        const tablesWithCompletedBilling = new Set<string>();
 
-    tables.forEach((currentTable) => {
-        const previousTable = previousTables.find(
-            (table) => table.id === currentTable.id
-        );
+        reservation.forEach((item) => {
+            if (item.status !== "Pending" && item.status !== "Confirmed") return;
 
-        if (
-            previousTable &&
-            previousTable.status !== currentTable.status
-        ) {
-            const relatedReservation = reservation.find(
-                (item) =>
-                    item.tableNumber === currentTable.tableNumber &&
-                    (
-                        item.status === "Pending" ||
-                        item.status === "Confirmed"
-                    )
+            const table = tables.find((candidate) =>
+                candidate.tableNumber === item.tableNumber &&
+                candidate.section === item.tableSection
+            );
+            if (!table) return;
+
+            const paidOrder = orders.find((order) =>
+                order.tableNumber === table.tableNumber &&
+                order.tableSection === table.section &&
+                order.paymentStatus === "Paid"
+            );
+            const hasPaidBill = paidOrder && bills.some((bill) =>
+                bill.orderId === paidOrder.id && bill.paymentStatus === "Paid"
             );
 
-            if (relatedReservation) {
+            if (
+                table.status === "Cleaning" &&
+                hasPaidBill &&
+                !tablesWithCompletedBilling.has(table.id)
+            ) {
+                tablesWithCompletedBilling.add(table.id);
+                setReservation((current) => current.map((candidate) =>
+                    candidate.id === item.id
+                        ? {...candidate, status: "Completed"}
+                        : candidate
+                ));
                 setReservationMessage({
-                    type:
-                        currentTable.status === "Available"
-                            ? "success"
-                            : "error",
-                    message: `Table ${currentTable.tableNumber} status changed to ${currentTable.status}. Reservation for ${relatedReservation.customerName} is affected.`,
+                    type: "success",
+                    message: `Billing completed for Table ${table.tableNumber}. Reservation completed.`,
+                });
+                return;
+            }
+
+            if (
+                item.status === "Pending" &&
+                table.status === "Available" &&
+                table.capacity >= item.guests &&
+                !tablesBeingReserved.has(table.id)
+            ) {
+                tablesBeingReserved.add(table.id);
+                setReservation((current) => current.map((candidate) =>
+                    candidate.id === item.id
+                        ? {...candidate, status: "Confirmed"}
+                        : candidate
+                ));
+                updateTableStatus(table.id, "Reserved");
+                sessionStorage.setItem(
+                    TABLE_NOTICE_STORAGE_KEY,
+                    `Table ${table.tableNumber} reserved.`
+                );
+                setReservationMessage({
+                    type: "success",
+                    message: `Reservation confirmed. Table ${table.tableNumber} is reserved for ${item.customerName}.`,
                 });
             }
-        }
-    });
-
-    previousTablesRef.current = tables;
-}, [tables, reservation]);
+        });
+    }, [bills, orders, reservation, tables, updateTableStatus]);
  
     const filteredReservations = reservation.filter((reservation) => {
         const matchesSearch = reservation.customerName.toLowerCase().includes(search.toLowerCase()) ||
@@ -143,6 +175,7 @@ useEffect(() => {
             ? String(item.tableNumber)
             :""
         );
+        setTableSection(item.tableSection);
         setOpenMenuId(null);
         setShowForm(true);
     }
@@ -153,7 +186,7 @@ useEffect(() => {
     };
 
 
-    const handleAddReservation = (e: React.FormEvent) => {
+const handleAddReservation = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (
@@ -162,14 +195,30 @@ useEffect(() => {
         !date ||
         !time ||
         !guests ||
-        !tableNumber
+        !tableNumber ||
+        !tableSection
     ) {
+        setReservationMessage({
+            type: "error",
+            message: "Complete all required fields and select an available table.",
+        });
         return;
     }
-    if (editingReservation) {
 
+    const guestCount = Number(guests);
+    if (!Number.isInteger(guestCount) || guestCount < 1) {
+        setReservationMessage({
+            type: "error",
+            message: "Guest count must be at least one.",
+        });
+        return;
+    }
+
+    if (editingReservation) {
         const selectedTable = tables.find(
-            (table) => table.tableNumber === Number(tableNumber)
+            (table) =>
+                table.tableNumber === Number(tableNumber) &&
+                table.section === tableSection
         );
 
         if (!selectedTable) {
@@ -179,24 +228,22 @@ useEffect(() => {
             });
             return;
         }
-        if (
-            editingReservation.tableNumber !== Number(tableNumber) &&
-            selectedTable.status !== "Available"
-        ) {
+
+        const tableChanged =
+            editingReservation.tableNumber !== Number(tableNumber) ||
+            editingReservation.tableSection !== tableSection;
+
+ 
+        if (selectedTable.capacity < Number(guests)) {
             setReservationMessage({
                 type: "error",
-                message: `Table ${tableNumber} is not available.`,
+                message: `Table ${selectedTable.tableNumber} is not suitable for ${guests} guests.`,
             });
             return;
         }
 
-        if (selectedTable.capacity < Number(guests)) {
-            setReservationMessage({
-                type: "error",
-                message: `Table ${tableNumber} is not suitable for ${guests} guests.`,
-            });
-            return;
-        }
+        const canConfirm = selectedTable.status === "Available" ||
+            (!tableChanged && selectedTable.status === "Reserved");
 
         const updatedReservation: Reservation = {
             ...editingReservation,
@@ -206,7 +253,8 @@ useEffect(() => {
             time,
             guests: Number(guests),
             tableNumber: Number(tableNumber),
-            status: editingReservation.status,
+            tableSection,
+            status: canConfirm ? "Confirmed" : "Pending",
         };
 
         setReservation((prev) =>
@@ -216,25 +264,41 @@ useEffect(() => {
                     : item
             )
         );
-        if (
-            editingReservation.tableNumber !== Number(tableNumber)
-        ) {
+
+     
+        if (tableChanged) {
             const oldTable = tables.find(
                 (table) =>
-                    table.tableNumber === editingReservation.tableNumber
+                    table.tableNumber === editingReservation.tableNumber &&
+                    table.section === editingReservation.tableSection
             );
 
-            if (oldTable) {
+            if (oldTable?.status === "Reserved") {
                 updateTableStatus(oldTable.id, "Available");
             }
-
-            updateTableStatus(selectedTable.id, "Reserved");
         }
 
+        if (selectedTable.status === "Available" && canConfirm) {
+            updateTableStatus(selectedTable.id, "Reserved");
+            sessionStorage.setItem(
+                TABLE_NOTICE_STORAGE_KEY,
+                `Table ${selectedTable.tableNumber} reserved.`
+            );
+        }
+
+        setReservationMessage({
+            type: "success",
+            message: canConfirm
+                ? `Reservation confirmed. Table ${selectedTable.tableNumber} is reserved for ${customerName}.`
+                : `Reservation is pending because Table ${selectedTable.tableNumber} is ${selectedTable.status.toLowerCase()}.`,
+        });
     } else {
+    
 
         const selectedTable = tables.find(
-            (table) => table.tableNumber === Number(tableNumber)
+            (table) =>
+                table.tableNumber === Number(tableNumber) &&
+                table.section === tableSection
         );
 
         if (!selectedTable) {
@@ -244,52 +308,109 @@ useEffect(() => {
             });
             return;
         }
-        if (selectedTable.status !== "Available") {
-            setReservationMessage({
-                type: "error",
-                message: `Table ${tableNumber} is not available.`,
-            });
-            return;
-        }
+
         if (selectedTable.capacity < Number(guests)) {
             setReservationMessage({
                 type: "error",
-                message: `Table ${tableNumber} is not suitable for ${guests} guests.`,
+                message: `Table ${selectedTable.tableNumber} is not suitable for ${guests} guests.`,
             });
             return;
         }
 
         const newReservation: Reservation = {
-            id: crypto.randomUUID(),
+            id: createRecordId("RESERVATION"),
             customerName: customerName.trim(),
             phone: phone.trim(),
             date,
             time,
             guests: Number(guests),
             tableNumber: Number(tableNumber),
-            status: "Pending",
+            tableSection: selectedTable.section,
+            status: selectedTable.status === "Available" ? "Confirmed" : "Pending",
             createdAt: new Date().toISOString(),
         };
 
         setReservation((prev) => [...prev, newReservation]);
 
-        updateTableStatus(selectedTable.id, "Reserved");
-
-        setReservationMessage({
-            type: "success",
-            message: `Reservation added successfully. Table ${selectedTable.tableNumber} is now reserved.`,
-        });
+        if (selectedTable.status === "Available") {
+            updateTableStatus(selectedTable.id, "Reserved");
+            sessionStorage.setItem(
+                TABLE_NOTICE_STORAGE_KEY,
+                `Table ${selectedTable.tableNumber} reserved.`
+            );
+            setReservationMessage({
+                type: "success",
+                message: `Reservation confirmed. Table ${selectedTable.tableNumber} is reserved for ${customerName}.`,
+            });
+        } else {
+            setReservationMessage({
+                type: "success",
+                message: `Reservation saved as pending. Table ${selectedTable.tableNumber} is currently ${selectedTable.status.toLowerCase()}.`,
+            });
+        }
     }
 
+  
     setCustomerName("");
     setPhone("");
     setDate("");
     setTime("");
     setGuests("");
     setTableNumber("");
+    setTableSection("");
     setShowForm(false);
     setEditingReservation(null);
+}; 
+    const handleConfirmReservation = (id: string) => {
+    const reservationToConfirm = reservation.find(
+        (item) => item.id === id
+    );
+    if (!reservationToConfirm) return;
+
+    if (reservationToConfirm.status !== "Pending") return;
+
+    const table = tables.find(
+        (item) =>
+            item.tableNumber === reservationToConfirm.tableNumber &&
+            item.section === reservationToConfirm.tableSection
+    );
+    if (!table) {
+        setReservationMessage({
+            type: "error",
+            message: "The reserved table could not be found.",
+        });
+        return;
+    }
+    if (table.status !== "Available") {
+        setReservationMessage({
+            type: "error",
+            message: `Reservation remains pending. Table ${table.tableNumber} is currently ${table.status.toLowerCase()}.`,
+        });
+        setOpenMenuId(null);
+        return;
+    }
+    updateTableStatus(table.id, "Reserved");
+    setReservation((prev) =>
+        prev.map((item) =>
+            item.id === id
+                ? {
+                      ...item,
+                      status: "Confirmed",
+                  }
+                : item
+        )  
+    );
+    setReservationMessage({
+        type: "success",
+        message: `Reservation confirmed successfully. Table ${table.tableNumber} is reserved for ${reservationToConfirm.customerName}.`,
+    });
+    sessionStorage.setItem(
+        TABLE_NOTICE_STORAGE_KEY,
+        `Table ${table.tableNumber} reserved.`
+    );
+    setOpenMenuId(null);
 };
+
 
     const handleCancelReservation = (id:string) => {
         const reservationToCancel = reservation.find(
@@ -305,13 +426,15 @@ useEffect(() => {
     ));
 
     const table = tables.find(
-        (item) => item.tableNumber === reservationToCancel.tableNumber
+        (item) => item.tableNumber === reservationToCancel.tableNumber &&
+        item.section === reservationToCancel.tableSection
     );
 
-    if(table) {
+    if(table?.status === "Reserved") {
         updateTableStatus(table.id,"Available");
     }
     }
+
 
     const handleCompleteReservation = (id:string) => {
         const reservationToComplete = reservation.find(
@@ -327,7 +450,8 @@ useEffect(() => {
         : item));
 
         const table = tables.find(
-            (item) => item.tableNumber === reservationToComplete.tableNumber
+            (item) => item.tableNumber === reservationToComplete.tableNumber &&
+            item.section === reservationToComplete.tableSection
         );
 
         if(table){
@@ -353,9 +477,11 @@ useEffect(() => {
             prev.filter((item) => item.id !== reservationId)
         );
 
-        const table = tables.find((item) => item.tableNumber === reservationToDelete.tableNumber);
+        const table = tables.find((item) => 
+            item.tableNumber === reservationToDelete.tableNumber &&
+            item.section === reservationToDelete.tableSection);
 
-        if(table && (
+        if(table?.status === "Reserved" && (
             reservationToDelete.status === "Pending" || 
             reservationToDelete.status === "Confirmed")
         ) {
@@ -365,11 +491,11 @@ useEffect(() => {
     }
  
     return (
-        <div className="space-y-6">
+        <div className="flex h-full min-h-0 flex-col gap-6">
 
             {reservationMessage && (
-                <div className="fixed right-5 top-5 z=[100] w-full max-w-sm">
-                    <div className={`rounded-xl border bg:white p-4 shadow-xl ${
+                <div className="fixed right-5 top-5 z-100 w-full max-w-sm px-4 sm:px-0">
+                    <div className={`rounded-xl border bg-white p-4 shadow-xl ${
                         reservationMessage.type === "success"
                         ? "border-emerald-200"
                         : "border-red-200"
@@ -445,7 +571,7 @@ useEffect(() => {
                     className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-700 outline-none focus:border-orange-500">
 
                         <option value="All">All</option>
-                        <option value="pending">Pending</option>
+                        <option value="Pending">Pending</option>
                         <option value="Confirmed">Confirmed</option>
                         <option value="Completed">Completed</option>
                         <option value="Cancelled">Cancelled</option>
@@ -453,13 +579,13 @@ useEffect(() => {
                 </div>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
 
-                <div className="overflow-x-auto">
+                <div className="min-h-0 flex-1 overflow-auto">
 
                     <table className="w-full min-w-200">
 
-                        <thead className="border-b border-slate-200 bg-slate-50">
+                        <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50">
 
                             <tr>
 
@@ -574,6 +700,14 @@ useEffect(() => {
                                                     Edit
                                                 </button>
 
+                                                {reservation.status === "Pending" && (
+                                                    <button
+                                                    type="button"
+                                                    onClick={() => handleConfirmReservation(reservation.id)}
+                                                    className="block w-full px-4 py-2 text-left text-sm text-emerald-600 hover:bg-emerald-50">
+                                                        Confirm
+                                                    </button>
+                                                )}
                                                 {(reservation.status === "Pending" || 
                                                     reservation.status === "Confirmed") && (
                                                         <>
@@ -621,10 +755,10 @@ useEffect(() => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
                 onClick={() => setShowForm(false)}>
 
-                    <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl"
+                    <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
                     onClick={(e) => e.stopPropagation()}>
 
-                        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+                        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-5">
 
                             <div>
                                 <h2 className="text-lg font-semibold text-slate-900">
@@ -645,8 +779,9 @@ useEffect(() => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleAddReservation} 
-                        className="space-y-5 p-6">
+                        <form onSubmit={handleAddReservation}
+                        className="flex min-h-0 flex-1 flex-col">
+                            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
                             <div >
                                 <label className="mb-2 block text-sm font-medium text-slate-700">
                                     Customer Name
@@ -654,6 +789,7 @@ useEffect(() => {
 
                                 <input
                                 type="text"
+                                required
                                 value={customerName}
                                 onChange={(e) => setCustomerName(e.target.value)}
                                 placeholder="Enter customer name..."
@@ -667,6 +803,7 @@ useEffect(() => {
 
                                 <input
                                 type="tel"
+                                required
                                 value={phone}
                                 onChange={(e) => setPhone(e.target.value)}
                                 placeholder="Enter phone Number..."
@@ -680,6 +817,7 @@ useEffect(() => {
 
                                 <input
                                 type="date"
+                                required
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
                                 className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"/>
@@ -692,6 +830,7 @@ useEffect(() => {
                                 
                                 <input
                                 type="time"
+                                required
                                 value={time}
                                 onChange={(e) => setTime(e.target.value)}
                                 className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"/>
@@ -705,6 +844,7 @@ useEffect(() => {
                                 <input
                                 type="number"
                                 min="1"
+                                required
                                 value={guests}
                                 onChange={(e) => setGuests(e.target.value)}
                                 placeholder="Enter number of guests"
@@ -716,27 +856,44 @@ useEffect(() => {
                                     Table Number
                                 </label>
                                 
-                                {availableTables.length > 0 ?(
+                                {selectableTables.length > 0 ?(
                                 <select
-                                value={tableNumber}
-                                onChange={(e) => setTableNumber(e.target.value)}
+                                required
+                                value={tableNumber && tableSection ? `${tableSection}::${tableNumber}` : ""}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+
+                                    if(!value){
+                                        setTableSection("");
+                                        setTableNumber("");
+                                        return;
+                                    }
+                                    const [selectedSection, selectedNumber] =value.split("::");
+
+                                    setTableSection(selectedSection);
+                                    setTableNumber(selectedNumber);
+                                }}
                                 className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100">
-                                    <option value=" ">Select Table</option>
+                                    <option value="">Select a table</option>
                                     
-                                    {availableTables.map((table) => (
-                                        <option key={table.id} value={table.tableNumber}>
-                                            Table {table.tableNumber} - {table.capacity} Seats - {table.section}
+                                    {selectableTables.map((table) => (
+                                        <option 
+                                        key={table.id} 
+                                        value={`${table.section}::${table.tableNumber}`}
+                                        >
+                                            {table.section} · Table {table.tableNumber} · {table.capacity} seats · {table.status}
                                         </option>
                                     ))}
                                 </select>
                                 ) : (
                                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
-                                        No tables available for {guests || 0} guests.
+                                        No tables have capacity for {guests || 0} guests.
                                     </div>
                                 )}
                             </div>
 
-                            <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
+                            </div>
+                            <div className="flex shrink-0 justify-end gap-3 border-t border-slate-100 px-6 py-4">
 
                                 <button
                                 type="button"

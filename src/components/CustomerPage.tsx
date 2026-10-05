@@ -1,12 +1,13 @@
 import {Search,Plus, X} from "lucide-react";
 import {useState, useEffect} from "react";
 import type {Customer} from "../types/customer";
+import {createRecordId, normalizeRecordId} from "../utils/recordIds";
 
 const CUSTOMER_STORAGE_KEY = "restaurant_customers";
 
 const initialCustomers : Customer[] = [
      {
-    id: "1",
+    id: "CUSTOMER-1",
     name: "Rahul Sharma",
     email: "rahul@gmail.com",
     phone: "9876543210",
@@ -15,7 +16,7 @@ const initialCustomers : Customer[] = [
     createdAt: new Date().toISOString(),
   },
   {
-    id: "2",
+    id: "CUSTOMER-2",
     name: "Priya Patel",
     email: "priya@gmail.com",
     phone: "9876543211",
@@ -24,7 +25,7 @@ const initialCustomers : Customer[] = [
     createdAt: new Date().toISOString(),
   },
   {
-    id: "3",
+    id: "CUSTOMER-3",
     name: "Amit Kumar",
     email: "amit@gmail.com",
     phone: "9876543212",
@@ -43,7 +44,11 @@ const CustomerPage = () => {
         const storedCustomers = localStorage.getItem(CUSTOMER_STORAGE_KEY);
 
         if(storedCustomers) {
-            return JSON.parse(storedCustomers);
+            const parsedCustomers = JSON.parse(storedCustomers) as Customer[];
+            return parsedCustomers.map((customer) => ({
+                ...customer,
+                id: normalizeRecordId(customer.id, "CUSTOMER"),
+            }));
         }
         return initialCustomers;
     });
@@ -59,7 +64,7 @@ const CustomerPage = () => {
             CUSTOMER_STORAGE_KEY,
             JSON.stringify(customers)
         );
-    },[customers])
+    },[customers]) 
 
     const filteredCustomers = customers.filter((customer) => 
     customer.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -91,7 +96,7 @@ const CustomerPage = () => {
         setEditingCustomer(null);
     }else{
     const newCustomer : Customer ={
-        id: crypto.randomUUID(),
+        id: createRecordId("CUSTOMER"),
         name:name.trim(),
         email:email.trim(),
         phone:phone.trim(),
@@ -123,7 +128,7 @@ const CustomerPage = () => {
 
    return(
 
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-6">
 
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
 
@@ -167,13 +172,13 @@ const CustomerPage = () => {
             </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
 
-            <div className="overflow-x-auto">
+            <div className="min-h-0 flex-1 overflow-auto">
 
                 <table className="w-full min-w-225">
 
-                    <thead className="border-b border-slate-200 bg-slate-50">
+                    <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50">
                         <tr>
 
                             <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
