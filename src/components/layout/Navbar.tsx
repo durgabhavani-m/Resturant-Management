@@ -2,9 +2,9 @@ import {Bell, Search,ChevronDown} from "lucide-react";
 
 const Navbar = () => {
     return (
-        <header className="flex h-20 items-center justify-between border-b border-slate-200 bh-white px-6">
+        <header className="flex h-20 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 sm:px-6">
 
-            <div className="relative w-72">
+            <div className="relative min-w-0 max-w-sm flex-1">
 
                 <Search size={18}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
@@ -16,7 +16,7 @@ const Navbar = () => {
                 />
             </div>
 
-            <div className="flex items-center gap-5">
+            <div className="flex shrink-0 items-center gap-3 sm:gap-5">
 
                 <button className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100">
                     <Bell size={20}/>

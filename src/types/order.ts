@@ -5,6 +5,11 @@ export type OrderStatus =
 | "Completed"
 | "Cancelled";
 
+export type PaymentStatus = 
+| "Pending"
+| "Paid"
+| "Refunded";
+
 export interface OrderItem {
     menuItemId : string;
     name : string;
@@ -16,10 +21,15 @@ export interface Order {
     id:string;
     orderNumber:string
     customerName:string;
+
+    tableNumber ?: number;
+    tableSection ?: string;
+
     items:OrderItem[];
     total: number;
     status:OrderStatus;
+    orderStatus: OrderStatus;
     orderType : "Dine In" | "Takeaway";
-    tableNumber?: number;
+    paymentStatus : PaymentStatus;
     createdAt : string;
 }

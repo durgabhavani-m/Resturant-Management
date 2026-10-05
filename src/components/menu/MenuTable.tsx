@@ -16,12 +16,12 @@ const MenuTable = ({items, onEdit, onDelete} : MenuTableProps) => {
     const [selectedItem, setSelectedItem] =useState<MenuItem | null>(null);
 
     return(
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
 
-            <div className="overflow-x-auto">
+            <div className="min-h-0 flex-1 overflow-auto">
 
                 <table className="w-full min-w-200">
-                    <thead className="border-b border-slate-200 bg-slate-50">
+                    <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50">
                         <tr>
                             <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
                                 Item
