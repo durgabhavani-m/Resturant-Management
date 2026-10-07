@@ -16,7 +16,7 @@ import { useTable } from "../context/TableContext";
 import type { RestaurantTable, TableStatus } from "../types/table";
 import { useEffect, useMemo, useState } from "react";
 import {useNavigate} from "react-router-dom";
-import {createRecordId} from "../utils/recordIds";
+import {getNextRecordId} from "../utils/recordIds";
 
 const TABLE_NOTICE_STORAGE_KEY = "restaurant_table_notice";
 
@@ -229,7 +229,7 @@ const TablesPage = () => {
       updateTable(updatedTable);
     } else {
       const newTable: RestaurantTable = {
-        id: createRecordId("TABLE"),
+        id: getNextRecordId("TABLE", tables.map((table) => table.id)),
         tableNumber: parsedTableNumber,
         capacity: parsedCapacity,
         section: section.trim(),
@@ -263,6 +263,15 @@ const TablesPage = () => {
   const handleViewTable = (table: RestaurantTable) => {
     setSelectedTable(table);
     setOpenMenuId(null);
+  };
+
+  const handleOpenTable = (table: RestaurantTable) => {
+    if (table.status === "Cleaning") {
+      handleViewTable(table);
+      return;
+    }
+
+    navigate(`/tables/${table.id}/order`);
   };
 
   
@@ -596,7 +605,12 @@ const TablesPage = () => {
   
                             <button
                               type="button"
-                              onClick={() => navigate(`/tables/${table.id}/order`)}
+                              onClick={() => handleOpenTable(table)}
+                              aria-label={
+                                table.status === "Cleaning"
+                                  ? `View cleaning status for Table ${table.tableNumber}`
+                                  : `Open order for Table ${table.tableNumber}`
+                              }
                               className={`${shape.wrapper} ${shape.shape} relative flex flex-col items-center justify-center border-2 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg ${statusStyles.border}`}>
                          
                               <span
@@ -716,6 +730,12 @@ const TablesPage = () => {
 
                   {selectedTable.status}
                 </div>
+                {selectedTable.status === "Cleaning" && (
+                  <p className="mt-3 text-sm text-blue-700">
+                    This table is being cleaned. Mark it Available when
+                    cleaning is complete to start a new order.
+                  </p>
+                )}
               </div>
 
 

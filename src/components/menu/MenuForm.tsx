@@ -1,19 +1,20 @@
 import {useState} from "react";
 import {X} from "lucide-react";
 import type {MenuCategory, MenuItem} from "../../types/menu";
-import {createRecordId} from "../../utils/recordIds";
 
 interface MenuFormProps{
     onClose: () => void;
-    onSubmit: (item: MenuItem) => void;
+    onSubmit: (item: MenuItem) => boolean;
+    categories: MenuCategory[];
     initialItem ?: MenuItem;
 }
 
-const MenuForm = ({onClose, onSubmit, initialItem,} : MenuFormProps) => {
+const MenuForm = ({onClose, onSubmit, categories, initialItem,} : MenuFormProps) => {
     const[name, setName] = useState(initialItem ?.name ?? "");
     const[description, setDescription] = useState(initialItem?.description ??"");
     const[price, setPrice] = useState(initialItem?.price.toString() ??"");
     const[category, setCategory] = useState<MenuCategory>(initialItem?.category ??"Starters");
+    const[formError, setFormError] = useState("");
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -23,14 +24,18 @@ const MenuForm = ({onClose, onSubmit, initialItem,} : MenuFormProps) => {
         }
 
         const newItem:MenuItem = {
-            id:initialItem?.id ?? createRecordId("MENU"),
+            id:initialItem?.id ?? "",
             name: name.trim(),
             description:description.trim(),
             price:Number(price),
             category,
-            available:initialItem?.available ?? true,
+            isAvailable:initialItem?.isAvailable ?? true,
         };
-        onSubmit(newItem);
+        if (!onSubmit(newItem)) {
+            setFormError("An item with this name already exists in the menu.");
+            return;
+        }
+        setFormError("");
     };
 
     return(
@@ -68,8 +73,12 @@ const MenuForm = ({onClose, onSubmit, initialItem,} : MenuFormProps) => {
                         </label>
 
                         <input
+                        required
                         value={name}
-                        onChange={(e) => setName(e.target.value)}
+                        onChange={(e) => {
+                            setName(e.target.value);
+                            setFormError("");
+                        }}
                         placeholder="e.g. Paneer Tikka"
                         className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-orange-500"/>
                     </div>
@@ -96,6 +105,9 @@ const MenuForm = ({onClose, onSubmit, initialItem,} : MenuFormProps) => {
 
                                 <input 
                                 type="number"
+                                min="0"
+                                step="0.01"
+                                required
                                 value={price}
                                 onChange={(e) => setPrice(e.target.value)}
                                 placeholder="280"
@@ -108,18 +120,24 @@ const MenuForm = ({onClose, onSubmit, initialItem,} : MenuFormProps) => {
                                 </label>
 
                                 <select
+                                required
                                 value={category}
-                                onChange={(e) => setCategory(e.target.value as MenuCategory)}
+                                onChange={(e) => setCategory(e.target.value)}
                                 className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-orange-500">
-
-                                <option>Starters</option>
-                                <option>Main Course</option>
-                                <option>Desserts</option>
-                                <option>Beverages</option>
-
+                                {categories.map((menuCategory) => (
+                                    <option key={menuCategory} value={menuCategory}>
+                                        {menuCategory}
+                                    </option>
+                                ))}
                                 </select>
                             </div>
                         </div>
+
+                        {formError && (
+                            <p role="alert" className="text-sm font-medium text-red-600">
+                                {formError}
+                            </p>
+                        )}
 
                     </div>
                         <div className="flex shrink-0 justify-end gap-3 border-t border-slate-100 px-6 py-4">

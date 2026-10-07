@@ -1,7 +1,7 @@
 import {Search,Plus, X} from "lucide-react";
 import {useState, useEffect} from "react";
 import type {Customer} from "../types/customer";
-import {createRecordId, normalizeRecordId} from "../utils/recordIds";
+import {getNextRecordId, normalizeRecordId} from "../utils/recordIds";
 
 const CUSTOMER_STORAGE_KEY = "restaurant_customers";
 
@@ -96,7 +96,7 @@ const CustomerPage = () => {
         setEditingCustomer(null);
     }else{
     const newCustomer : Customer ={
-        id: createRecordId("CUSTOMER"),
+        id: getNextRecordId("CUSTOMER", customers.map((customer) => customer.id)),
         name:name.trim(),
         email:email.trim(),
         phone:phone.trim(),

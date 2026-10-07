@@ -80,8 +80,8 @@ function App () {
                         <Route path="/" element={<Navigate to ="/login" replace/>}/></Route>
 
                         </Routes>
-                                                </RestaurantProvider>
-                                            </BillingProvider>  
+                            </RestaurantProvider>
+                        </BillingProvider>  
                     </StaffProvider>
                 </MenuProvider>
             </OrderProvider>
