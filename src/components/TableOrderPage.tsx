@@ -1,4 +1,4 @@
-import {useMemo, useRef, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 import {ArrowLeft, Banknote, CreditCard, Minus, Plus, ShoppingCart, Smartphone, Trash2, Wallet, X} from "lucide-react";
 import {useNavigate, useParams} from "react-router-dom";
 
@@ -9,7 +9,7 @@ import {useBilling} from "../context/BillingContext";
 
 import type {Order} from "../types/order";
 import type {Bill, PaymentMethod} from "../types/billing";
-import {createRecordId, normalizeRecordId} from "../utils/recordIds";
+import {getNextRecordId, resolveRecordId} from "../utils/recordIds";
 
 interface CartItem {
     menuItemId : string;
@@ -17,6 +17,9 @@ interface CartItem {
     price : number;
     quantity : number;
 }
+
+const getTableCartStorageKey = (tableId: string) =>
+    `restaurant_table_cart_${tableId}`;
 
 const TableOrderPage = () => {
     const navigate = useNavigate();
@@ -28,21 +31,28 @@ const TableOrderPage = () => {
     const {bills, addBill, updateBill} = useBilling();
 
     const normalizedTableId = tableId
-        ? normalizeRecordId(tableId, "TABLE")
+        ? resolveRecordId(tableId, "TABLE")
         : undefined;
     const table = tables.find((item) =>
         item.id === tableId || item.id === normalizedTableId
     );
+    const cartTableId = table?.id;
 
     const existingOrder = orders.find((order) => 
         order.tableNumber === table?.tableNumber &&
         order.tableSection === table?.section &&
-        order.orderType === "Dine In"
+        order.orderType === "Dine In" &&
+        order.paymentStatus !== "Paid"
     );
 
-    const [cart, setCart] = useState<CartItem[]>(
-        existingOrder?.items || []
-    );
+    const [cart, setCart] = useState<CartItem[]>(() => {
+        if (!table) return [];
+
+        const savedCart = localStorage.getItem(getTableCartStorageKey(table.id));
+        return savedCart === null
+            ? existingOrder?.items ?? []
+            : JSON.parse(savedCart) as CartItem[];
+    });
 
     const [selectedCategory, setSelectedCategory] = useState("All");
     const [isBillingOpen, setIsBillingOpen] = useState(false);
@@ -55,6 +65,17 @@ const TableOrderPage = () => {
         paymentMethod: PaymentMethod;
     } | null>(null);
     const paymentInProgress = useRef(false);
+
+    useEffect(() => {
+        if (!cartTableId) return;
+
+        const storageKey = getTableCartStorageKey(cartTableId);
+        if (cart.length === 0) {
+            localStorage.removeItem(storageKey);
+        } else {
+            localStorage.setItem(storageKey, JSON.stringify(cart));
+        }
+    }, [cart, cartTableId]);
 
     const categories = useMemo(() => {
         const normalizedCategories = Array.from(
@@ -77,7 +98,7 @@ const TableOrderPage = () => {
 
     const filteredMenuItems = useMemo(() => {
         return menuItems.filter((item) => {
-            if(!item.available) return false;
+            if(!item.isAvailable) return false;
 
             if(selectedCategory === "All") {
                 return true;
@@ -227,7 +248,7 @@ const TableOrderPage = () => {
         const order: Order = existingOrder
             ? {
                 ...existingOrder,
-                customerName: existingOrder.customerName || "Walk-in Customer",
+                customerName: existingOrder.customerName || "Dine-in Customer",
                 items: cart,
                 total,
                 status: "Completed",
@@ -236,9 +257,9 @@ const TableOrderPage = () => {
                 paymentStatus: "Paid",
             }
             : {
-                id: createRecordId("ORDER"),
+                id: getNextRecordId("ORDER", orders.map((item) => item.id)),
                 orderNumber: `ORD-${paymentTimestamp}`,
-                customerName: "Walk-in Customer",
+                customerName: "Dine-in Customer",
                 tableNumber: table.tableNumber,
                 tableSection: table.section,
                 items: cart,
@@ -260,7 +281,7 @@ const TableOrderPage = () => {
 
         const paidAt = new Date().toISOString();
         const bill: Bill = {
-            id: existingBill?.id ?? createRecordId("BILL"),
+            id: existingBill?.id ?? getNextRecordId("BILL", bills.map((item) => item.id)),
             billNumber: existingBill?.billNumber ?? `BILL-${paymentTimestamp}`,
             orderId: order.id,
             orderNumber: order.orderNumber,
@@ -349,7 +370,7 @@ const TableOrderPage = () => {
                     </h1>
 
                     <p className="mt-1 text-sm text-slate-500">
-                        Capacity: {table.capacity}quests
+                        Capacity: {table.capacity} guests
                     </p>
                 </div>
             </div>
@@ -490,7 +511,7 @@ const TableOrderPage = () => {
                                         </p>
 
                                         <p className="mt-1 text-xs text-slate-500">
-                                            {item.quantity} × ₹{item.price.toLocaleString("en-IN")}
+                                            {item.quantity} * ₹{item.price.toLocaleString("en-IN")}
                                         </p>
                                     </div>
 

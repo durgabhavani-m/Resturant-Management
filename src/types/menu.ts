@@ -1,8 +1,4 @@
-export type MenuCategory = 
-|"Starters"
-|"Main Course"
-|"Desserts"
-|"Beverages"
+export type MenuCategory = string;
 
 export interface MenuItem{
     id:string;
@@ -10,5 +6,5 @@ export interface MenuItem{
     description:string;
     price:number;
     category:MenuCategory;
-    available:boolean;
+    isAvailable:boolean;
 }

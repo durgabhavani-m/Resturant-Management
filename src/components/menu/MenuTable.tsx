@@ -76,12 +76,13 @@ const MenuTable = ({items, onEdit, onDelete} : MenuTableProps) => {
                                     type="button"
                                     onClick={() => toggleAvailability(item.id)} 
                                     className={`rounded-full px-2.5 py-1 text-sm font-medium ${
-                                        item.available
+                                        item.isAvailable
                                         ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
                                         : "bg-red-50 text-red-600 hover:bg-red-100"
                                     }`}
                                     >
-                                        {item.available ? "Available" : "Unavailable"}
+                                        {item.isAvailable
+                                         ? "Available" : "Out of stock"}
                                     </button>
                                 </td>
 
@@ -146,7 +147,7 @@ const MenuTable = ({items, onEdit, onDelete} : MenuTableProps) => {
             {items.length === 0 && (
                 <div className="py-12 text-center text-sm text-slate-400">
                     No menu items found.
-                    </div>
+                </div>
             )}
 
             {selectedItem && (
@@ -214,7 +215,7 @@ const MenuTable = ({items, onEdit, onDelete} : MenuTableProps) => {
                                 </span>
 
                                 <span className="text-sm font-medium text-slate-900">
-                                    {selectedItem.available ? "Available" : "Unavailable"}
+                                    {selectedItem.isAvailable ? "Available" : "Out of stock"}
                                 </span>
                             </div>
 

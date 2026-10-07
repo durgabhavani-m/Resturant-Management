@@ -1,6 +1,6 @@
 import {createContext,useContext,useEffect,useState }from "react";
 import type { RestaurantTable, TableStatus} from "../types/table";
-import {normalizeRecordId} from "../utils/recordIds";
+import {getNextRecordId, normalizeRecordId} from "../utils/recordIds";
 
 const TABLE_STORAGE_KEY = "restaurant_tables";
 
@@ -83,7 +83,7 @@ export const TableProvider = ({
     const addTable = (table:RestaurantTable) => {  
         setTables((prev) => [
             ...prev,
-            {...table, id: normalizeRecordId(table.id, "TABLE")},
+            {...table, id: getNextRecordId("TABLE", prev.map((existingTable) => existingTable.id))},
         ]);
     }
 

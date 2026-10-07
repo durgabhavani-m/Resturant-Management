@@ -13,4 +13,5 @@ export interface Staff{
     role:StaffRole;
     status: StaffStatus;
     createdAt:string;
+    password?: string;
 }

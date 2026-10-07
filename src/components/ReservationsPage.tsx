@@ -4,7 +4,7 @@ import type {Reservation,ReservationStatus} from "../types/reservation";
 import {useTable} from "../context/TableContext";
 import {useOrder} from "../context/OrderContext";
 import {useBilling} from "../context/BillingContext";
-import {createRecordId, normalizeRecordId} from "../utils/recordIds";
+import {getNextRecordId, normalizeRecordId} from "../utils/recordIds";
 
 const RESERVATION_STORAGE_KEY = "reservation_customers";
 const TABLE_NOTICE_STORAGE_KEY = "restaurant_table_notice";
@@ -318,7 +318,7 @@ const handleAddReservation = (e: React.FormEvent) => {
         }
 
         const newReservation: Reservation = {
-            id: createRecordId("RESERVATION"),
+            id: getNextRecordId("RESERVATION", reservation.map((item) => item.id)),
             customerName: customerName.trim(),
             phone: phone.trim(),
             date,

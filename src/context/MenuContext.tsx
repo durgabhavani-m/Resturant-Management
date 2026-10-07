@@ -6,14 +6,16 @@ import {
     type ReactNode,
 }from "react";
 
-import type {MenuItem} from "../types/menu";
-import {normalizeRecordId} from "../utils/recordIds";
+import type {MenuCategory, MenuItem} from "../types/menu";
+import {getNextRecordId, normalizeRecordId} from "../utils/recordIds";
 
 interface MenuContextType{
     items:MenuItem[];
+    categories:MenuCategory[];
 
-    addItem: (item:MenuItem) => void;
-    updateItem: (item:MenuItem) => void;
+    addItem: (item:MenuItem) => boolean;
+    updateItem: (item:MenuItem) => boolean;
+    addCategory: (category:string) => boolean;
     deleteItem: (id: string) => void;
     toggleAvailability: (id: string) => void;
 }
@@ -23,6 +25,27 @@ const MenuContext = createContext<MenuContextType |undefined>(
 )
 
 const STORAGE_KEY = "restaurant_menu";
+const CATEGORY_STORAGE_KEY = "restaurant_menu_categories";
+
+const defaultCategories: MenuCategory[] = [
+    "Starters",
+    "Main Course",
+    "Desserts",
+    "Beverages",
+];
+
+const normalizeCategory = (category: string) =>
+    category.trim().replace(/\s+/g, " ");
+
+const uniqueCategories = (source: string[]): MenuCategory[] => {
+    const unique = new Map<string, MenuCategory>();
+    source.forEach((category) => {
+        const normalized = normalizeCategory(category);
+        const key = normalized.toLowerCase();
+        if (normalized && !unique.has(key)) unique.set(key, normalized);
+    });
+    return Array.from(unique.values());
+};
 
 const initialItems:MenuItem[] = [
     {
@@ -31,7 +54,7 @@ const initialItems:MenuItem[] = [
     description: "Grilled cottage cheese with spices",
     price: 280,
     category: "Starters",
-    available: true,
+    isAvailable: true,
   },
   {
     id: "MENU-2",
@@ -39,7 +62,7 @@ const initialItems:MenuItem[] = [
     description: "Chicken cooked in creamy tomato gravy",
     price: 420,
     category: "Main Course",
-    available: true,
+    isAvailable: true,
   },
   {
     id: "MENU-3",
@@ -47,7 +70,7 @@ const initialItems:MenuItem[] = [
     description: "Traditional Indian sweet",
     price: 120,
     category: "Desserts",
-    available: true,
+    isAvailable: true,
   },
 ];
 
@@ -57,12 +80,34 @@ export const MenuProvider = ({children,}:{children:ReactNode;}) => {
 
         if (storedItems) {
             const parsedItems = JSON.parse(storedItems) as MenuItem[];
-            return parsedItems.map((item) => ({
-                ...item,
-                id: normalizeRecordId(item.id, "MENU"),
-            }));
+            const uniqueItems = new Map<string, MenuItem>();
+            parsedItems.forEach((item) => {
+                const normalizedName = item.name.trim();
+                const key = normalizedName.toLowerCase();
+                if (!key || uniqueItems.has(key)) return;
+                uniqueItems.set(key, {
+                    ...item,
+                    id: normalizeRecordId(item.id, "MENU"),
+                    name: normalizedName,
+                    category: normalizeCategory(item.category),
+                });
+            });
+            return Array.from(uniqueItems.values());
         }
         return initialItems;
+    });
+
+    const [categories, setCategories] = useState<MenuCategory[]>(() => {
+        const storedCategories = localStorage.getItem(CATEGORY_STORAGE_KEY);
+        const savedCategories = storedCategories
+            ? JSON.parse(storedCategories) as string[]
+            : [];
+        const allCategories = [
+            ...defaultCategories,
+            ...savedCategories,
+            ...items.map((item) => item.category),
+        ];
+        return uniqueCategories(allCategories);
     });
 
     useEffect(()=> {
@@ -72,18 +117,60 @@ export const MenuProvider = ({children,}:{children:ReactNode;}) => {
         );
     },[items]);
 
-    const addItem = (item:MenuItem) => {
-        setItems((prev) => [
-            ...prev,
-            {...item, id: normalizeRecordId(item.id, "MENU")},
-        ]);
+    useEffect(() => {
+        localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(categories));
+    }, [categories]);
+
+    const addCategory = (category: string): boolean => {
+        const normalizedCategory = normalizeCategory(category);
+        if (!normalizedCategory || categories.some((existingCategory) =>
+            normalizeCategory(existingCategory).toLowerCase() === normalizedCategory.toLowerCase()
+        )) {
+            return false;
+        }
+
+        setCategories((prev) => [...prev, normalizedCategory]);
+        return true;
     };
 
-    const updateItem = (updatedItem:MenuItem) => {
+    const addItem = (item:MenuItem): boolean => {
+        const normalizedName = item.name.trim().toLowerCase();
+        if (items.some((existingItem) =>
+            existingItem.name.trim().toLowerCase() === normalizedName
+        )) {
+            return false;
+        }
+
+        const normalizedCategory = normalizeCategory(item.category);
+        setItems((prev) => [
+            ...prev,
+            {
+                ...item,
+                id: getNextRecordId("MENU", prev.map((existingItem) => existingItem.id)),
+                name: item.name.trim(),
+                category: normalizedCategory,
+            },
+        ]);
+        addCategory(normalizedCategory);
+        return true;
+    };
+
+    const updateItem = (updatedItem:MenuItem): boolean => {
+        const normalizedName = updatedItem.name.trim().toLowerCase();
+        if (items.some((item) =>
+            item.id !== updatedItem.id &&
+            item.name.trim().toLowerCase() === normalizedName
+        )) {
+            return false;
+        }
+
+        const normalizedCategory = normalizeCategory(updatedItem.category);
         setItems((prev) => 
         prev.map((item) =>
         item.id === updatedItem.id
-        ?updatedItem : item));
+        ?{...updatedItem, name: updatedItem.name.trim(), category: normalizedCategory} : item));
+        addCategory(normalizedCategory);
+        return true;
     };
 
     const deleteItem = (id: string) => {
@@ -93,12 +180,12 @@ export const MenuProvider = ({children,}:{children:ReactNode;}) => {
     };
 
     const toggleAvailability = (id:string) => {
-        setItems((prev) => 
-        prev.map((item) => 
+        setItems((currentItems) => 
+        currentItems.map((item) => 
         item.id === id
     ?{
         ...item,
-        available:!item.available,
+        isAvailable:!item.isAvailable,
     }
      :item
     )
@@ -109,8 +196,10 @@ return (
     <MenuContext.Provider
     value={{
         items,
+        categories,
         addItem,
         updateItem,
+        addCategory,
         deleteItem,
         toggleAvailability,
     }}

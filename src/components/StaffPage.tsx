@@ -2,7 +2,6 @@ import {Search, Plus, MoreHorizontal, Eye, Pencil, Trash2, Users,} from "lucide-
 import {useState, useMemo} from "react";
 import {useStaff} from "../context/StaffContext";
 import type {Staff, StaffRole, StaffStatus} from "../types/staff";
-import {createRecordId} from "../utils/recordIds";
 
 const StaffPage = () => {
     const{staff, addStaff, updateStaff, deleteStaff} = useStaff();
@@ -20,6 +19,7 @@ const StaffPage = () => {
     const[name, setName] = useState("");
     const[email, setEmail] = useState("");
     const[phone, setPhone] = useState("");
+    const[password, setPassword] = useState("");
     const[formRole, setFormRole] = useState<StaffRole>("Dine-in Staff");
     const[formStatus, setFormStatus] = useState<StaffStatus>("Active");
 
@@ -27,6 +27,7 @@ const StaffPage = () => {
         name?: string;
         email?: string;
         phone?: string;
+        password?: string;
     }>({});
 
     const filteredStaff = useMemo(() => {
@@ -99,6 +100,7 @@ const StaffPage = () => {
         setName("");
         setEmail("");
         setPhone("");
+        setPassword("");
         setFormRole("Dine-in Staff");
         setFormStatus("Active");
         setFormErrors({});
@@ -116,6 +118,7 @@ const StaffPage = () => {
         setName(member.name);
         setEmail(member.email);
         setPhone(member.phone);
+        setPassword("");
         setFormRole(member.role);
         setFormStatus(member.status);
 
@@ -129,6 +132,7 @@ const StaffPage = () => {
             name?: string;
             email?: string;
             phone?: string;
+            password?: string;
         } = {};
 
         if(!name.trim()){
@@ -137,10 +141,25 @@ const StaffPage = () => {
 
         if(!email.trim()){
             errors.email = "Email is required.";
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+            errors.email = "Enter a valid email address.";
         }
 
         if(!phone.trim()){
             errors.phone = "Phone number is required.";
+        }
+
+        if ((!editingStaff || !editingStaff.password) && !password) {
+            errors.password = "Password is required for this login account.";
+        } else if (password && password.length < 8) {
+            errors.password = "Password must be at least 8 characters.";
+        }
+
+        if (staff.some((member) =>
+            member.id !== editingStaff?.id &&
+            member.email.trim().toLowerCase() === email.trim().toLowerCase()
+        )) {
+            errors.email = "This email is already assigned to another staff account.";
         }
 
         if(Object.keys(errors).length > 0){
@@ -149,25 +168,33 @@ const StaffPage = () => {
         }
 
         if(editingStaff){
-            updateStaff({
+            const updatedStaff: Staff = {
                 ...editingStaff,
                 name:name.trim(),
                 email:email.trim(),
                 phone:phone.trim(),
                 role:formRole,
                 status:formStatus,
-            });
+                ...(password ? {password} : {}),
+            };
+            if (!updateStaff(updatedStaff)) {
+                setFormErrors({email: "This email is already assigned to another staff account."});
+                return;
+            }
         }else{
-            const newStaff: Staff = {
-                id: createRecordId("STAFF"),
+            const newStaff: Omit<Staff, "id"> = {
                 name: name.trim(),
                 email: email.trim(),
                 phone: phone.trim(),
                 role: formRole,
                 status: formStatus,
                 createdAt: new Date().toISOString(),
+                password,
             };
-            addStaff(newStaff);
+            if (!addStaff(newStaff)) {
+                setFormErrors({email: "This email is already assigned to another staff account."});
+                return;
+            }
         }
         setShowForm(false);
         resetForm();
@@ -282,6 +309,10 @@ const StaffPage = () => {
                                 </th>
 
                                 <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Role
+                                </th>
+
+                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                                     Status
                                 </th>
 
@@ -346,7 +377,7 @@ const StaffPage = () => {
                                                 </span>
                                             </td> 
 
-                                            <td className="relative px-5 py-4 text-right">
+                                            <td className="relative px-5 py-4 text-left">
                                                 <button
                                                 type="button"
                                                 onClick={() => 
@@ -375,7 +406,7 @@ const StaffPage = () => {
                                                         onClick={() => handleEditStaff(member)}
                                                         className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
                                                             <Pencil size={16}/>
-                                                            Delete
+                                                            Edit
                                                         </button>
 
                                                         <button
@@ -397,67 +428,88 @@ const StaffPage = () => {
             </div>
 
             {selectedStaff && (
-                <div className="fixed inset-0 z-100 flex item-center justify-center bg-black/40 p-4">
-                    <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
-                        <div className="border-b border-slate-200 px-6 py-4">
-                            <h2 className="text-lg font-semibold text-slate-800">
-                                Staff Details
-                            </h2>
-                        </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 pl-10">
+        <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
 
-                        <div className="space-y-4 px-6 py-5">
-                            <div className="flex items-center gap-3">
-                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 font-semibold text-orange-700">
-                                    {getInitials(selectedStaff.name)}
-                                </div>
+            {/* Header */}
+            <div className="border-b border-slate-200 px-5 py-4">
+                <h2 className="text-base font-semibold text-slate-800">
+                    Staff Details
+                </h2>
+            </div>
 
-                                <div>
-                                    <p className="font-semibold text-slate-800">
-                                        {selectedStaff.name}
-                                    </p>
+            {/* Profile */}
+            <div className="px-5 py-5">
 
-                                    <p className="text-sm text-slate-500">
-                                        {selectedStaff.role}
-                                    </p>
-                                </div>
-                            </div>
+                <div className="flex items-center gap-4">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-orange-100 text-base font-semibold text-orange-700">
+                        {getInitials(selectedStaff.name)}
+                    </div>
 
-                            <div>
-                                <p className="text-xs text-slate-500">Email</p>
-                                <p className="mt-1 text-sm text-slate-800">
-                                    {selectedStaff.email}
-                                </p>
-                            </div>
+                    <div className="min-w-0">
+                        <p className="text-base font-semibold text-slate-800">
+                            {selectedStaff.name}
+                        </p>
 
-                            <div>
-                                <p className="text-xs text-slate-500">Phone</p>
-                                <p className="mt-1 text-sm text-slate-800">
-                                    {selectedStaff.phone}
-                                </p>
-                            </div>
-
-                            <div>
-                                <p className="text-xs text-slate-500">Status</p>
-                                <span 
-                                className={`mt-1 inline-block rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
-                                    selectedStaff.status
-                                )}`}>
-                                    {selectedStaff.status}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end border-t border-slate-200 px-6 py-4">
-                            <button
-                            type="button"
-                            onClick={() => setSelectedStaff(null)}
-                            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                                Close
-                            </button>
-                        </div>
+                        <p className="mt-0.5 text-sm text-slate-500">
+                            {selectedStaff.role}
+                        </p>
                     </div>
                 </div>
-            )}
+
+                {/* Details */}
+                <div className="mt-6 space-y-4">
+
+                    <div>
+                        <p className="text-xs font-medium text-slate-400">
+                            Email
+                        </p>
+                        <p className="mt-1 text-sm text-slate-700">
+                            {selectedStaff.email}
+                        </p>
+                    </div>
+
+                    <div>
+                        <p className="text-xs font-medium text-slate-400">
+                            Phone
+                        </p>
+                        <p className="mt-1 text-sm text-slate-700">
+                            {selectedStaff.phone}
+                        </p>
+                    </div>
+
+                    <div>
+                        <p className="text-xs font-medium text-slate-400">
+                            Status
+                        </p>
+
+                        <span
+                            className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
+                                selectedStaff.status
+                            )}`}
+                        >
+                            {selectedStaff.status}
+                        </span>
+                    </div>
+
+                </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-3">
+                <button
+                    type="button"
+                    onClick={() => setSelectedStaff(null)}
+                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                >
+                    Close
+                </button>
+            </div>
+
+        </div>
+    </div>
+)}
+            
 {showForm && (
   <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 p-4">
     <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
@@ -543,6 +595,33 @@ const StaffPage = () => {
             </p>
           )}
         </div>
+
+                {/* Login password */}
+                <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                        {editingStaff?.password ? "New password (optional)" : "Login password"}
+                    </label>
+                    <input
+                        type="password"
+                        autoComplete="new-password"
+                        value={password}
+                        onChange={(event) => {
+                            setPassword(event.target.value);
+                            if (formErrors.password) {
+                                setFormErrors((prev) => ({...prev, password: undefined}));
+                            }
+                        }}
+                        placeholder={editingStaff?.password ? "Leave blank to keep current password" : "At least 8 characters"}
+                        className={`w-full rounded-lg border px-4 py-2.5 text-sm outline-none transition ${
+                            formErrors.password
+                                ? "border-red-400 focus:ring-2 focus:ring-red-100"
+                                : "border-slate-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        }`}
+                    />
+                    {formErrors.password && (
+                        <p className="mt-1 text-xs text-red-600">{formErrors.password}</p>
+                    )}
+                </div>
 
         {/* Phone */}
         <div>
