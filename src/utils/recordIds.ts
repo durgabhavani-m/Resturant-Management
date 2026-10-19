@@ -4,7 +4,6 @@ export type RecordIdPrefix =
   | "BILL"
   | "TABLE"
   | "STAFF"
-  | "CUSTOMER"
   | "RESERVATION";
 
 export const getNextRecordId = (
@@ -66,7 +65,6 @@ export const migrateStoredRecordIds = (): void => {
   const menu = migrateCollection("restaurant_menu", "MENU");
   const tables = migrateCollection("restaurant_tables", "TABLE");
   const staff = migrateCollection("restaurant_staff", "STAFF");
-  const customers = migrateCollection("restaurant_customers", "CUSTOMER");
   const reservations = migrateCollection("reservation_customers", "RESERVATION");
   const orders = migrateCollection("restaurant_orders", "ORDER");
   const bills = migrateCollection("restaurant_bills", "BILL");
@@ -118,7 +116,6 @@ export const migrateStoredRecordIds = (): void => {
     ...Array.from(menu.idMap, ([oldId, newId]) => [`MENU:${oldId}`, newId]),
     ...Array.from(tables.idMap, ([oldId, newId]) => [`TABLE:${oldId}`, newId]),
     ...Array.from(staff.idMap, ([oldId, newId]) => [`STAFF:${oldId}`, newId]),
-    ...Array.from(customers.idMap, ([oldId, newId]) => [`CUSTOMER:${oldId}`, newId]),
     ...Array.from(reservations.idMap, ([oldId, newId]) => [`RESERVATION:${oldId}`, newId]),
     ...Array.from(orders.idMap, ([oldId, newId]) => [`ORDER:${oldId}`, newId]),
     ...Array.from(bills.idMap, ([oldId, newId]) => [`BILL:${oldId}`, newId]),

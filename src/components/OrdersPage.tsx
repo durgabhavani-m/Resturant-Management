@@ -1,614 +1,650 @@
-import { Search, X, MoreHorizontal,Eye,Pencil,Trash2 } from "lucide-react";
-import {useState,} from "react";
-import {useOrder} from "../context/OrderContext";
-import type {Order, OrderStatus} from "../types/order";
-import {useTable} from "../context/TableContext";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
+import MenuItem from "@mui/material/MenuItem";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import Table from "@mui/material/Table";
+import TableHead from "@mui/material/TableHead";
+import TableBody from "@mui/material/TableBody";
+import TableRow from "@mui/material/TableRow";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import Paper from "@mui/material/Paper";
+import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
+import SearchIcon from "@mui/icons-material/Search";
+import CloseIcon from "@mui/icons-material/Close";
+
+import { useOrder } from "../context/OrderContext";
+import type { Order, OrderStatus } from "../types/order";
+import { useTable } from "../context/TableContext";
+import { useAppPreferences } from "../context/AppPreferencesContext";
+
+import {usePersistentState} from "../hooks/usePersistentState";
+
+const getStatusColor = (status: OrderStatus): "success" | "error" | "info" | "warning" => {
+  if (status === "Completed") return "success";
+  if (status === "Cancelled") return "error";
+  if (status === "Preparing") return "info";
+  return "warning";
+};
 
 const OrdersPage = () => {
-    const {
-      orders, 
-      updateOrder,
-      deleteOrder,
-    } = useOrder();
-    const { tables, updateTableStatus } = useTable();
-    const [search, setSearch] = useState("");
-    const [status, setStatus] = useState<OrderStatus | "All">("All");
-    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-    const [editingOrder, setEditingOrder] = useState<Order | null>(null);
-    const filteredOrders = orders.filter((order) => {
-        const matchesSearch = 
-        order.orderNumber.toLowerCase().includes(search.toLowerCase()) || 
-        order.customerName.toLowerCase().includes(search.toLowerCase());
+  const { orders, updateOrder } = useOrder();
+  const { tables, updateTableStatus } = useTable();
+  const { preferences } = useAppPreferences();
+  const [search, setSearch] = usePersistentState("orders_page_search", "");
+  const [status, setStatus] = usePersistentState<OrderStatus | "All">("orders_page_status","All");
+  const [section, setSection] = usePersistentState<string>("orders_page_section",preferences.defaultHistoryDateRange);
+  const [dateRange, setDateRange] = usePersistentState<string>("orders_page_date_range",preferences.defaultHistoryDateRange);
+  const [customStart, setCustomStart] = usePersistentState("orders_page_custom_start","");
+  const [customEnd, setCustomEnd] = usePersistentState("orders_page_custom_end","");
+  const [selectedOrder, setSelectedOrder] = usePersistentState<Order | null>("orders_page_Selected_order",null);
+  const [editingOrder, setEditingOrder] = usePersistentState<Order | null>("orders_age_editing_order",null);
 
-        const matchesStatus = status === "All" || order.status === status;
+  const filteredOrders = orders.filter((order) => {
 
-        return matchesSearch && matchesStatus;
-    }); 
+    const matchesSearch =
+      order.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
+      order.customerName.toLowerCase().includes(search.toLowerCase());
 
-    const handleStatusChange = (newStatus: OrderStatus) => {
-        if(!selectedOrder) return;
+    const matchesStatus = status === "All" || order.status === status;
 
-        const updatedOrder:Order = {
-            ...selectedOrder,
-            status: newStatus,
-            orderStatus:newStatus,
-        };
-        updateOrder(updatedOrder);
-        setSelectedOrder(updatedOrder);
-     };
-     const handleViewOrder = (order:Order) => {
-      setSelectedOrder(order);
-      setOpenMenuId(null);
-     };
+    const matchesSection = section === "All" || 
+    (order.orderType == "Dine In" &&
+      order.tableSection ===  section);
 
-     const handleEditOrder = (order:Order) => {
-      setEditingOrder(order);
-      setOpenMenuId(null);
-     };
+      const orderDate = new Date(order.createdAt);
+      const today = new Date();
+      today.setHours(0,0,0,0);
 
-     const handleDeleteOrder = (orderId:string) => {
-      deleteOrder(orderId);
-      setOpenMenuId(null);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
 
-      if(selectedOrder?.id === orderId){
-        setSelectedOrder(null);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() -1);
+
+      const last7Days = new Date(today);
+      last7Days.setDate(last7Days.getDate() -6);
+
+      const last30Days = new Date(today);
+      last30Days.setDate(last30Days.getDate() - 29);
+
+      let matchesDate = true;
+
+      if(dateRange === "Today"){
+        matchesDate =
+        orderDate >= today && orderDate < tomorrow;
+      }else if(dateRange === "Yesterday"){
+        matchesDate = 
+        orderDate >= yesterday && orderDate < today;
+      }else if(dateRange === "Last 7 Days"){
+        matchesDate = 
+        orderDate >= last7Days && orderDate < tomorrow;
+      }else if(dateRange === "Last 30 Days"){
+        matchesDate = 
+        orderDate >= last30Days && orderDate < tomorrow;
+      }else if (
+        dateRange === "Custom Range" &&
+        customStart &&
+        customEnd
+      ){
+        const start = new Date(`${customStart}T00:00:00`);
+        const end = new Date(`${customEnd}T00:00:00`);
+        end.setDate(end.getDate() + 1);
+
+        matchesDate = orderDate >= start && orderDate < end;
       }
-     };
-    return (
-        <div className="flex h-full min-h-0 flex-col gap-6">
-            <div>
-            <h1 className="text-2xl font-bold text-slate-900">
-                Orders
-            </h1>
-
-            <p className="mt-1 text-sm text-slate-500">
-                Manage Resturant Orders
-            </p>
-            </div>
-
-             <div className = "rounded-xl border border-slate-200 bg-white p-4">
-                <div className="flex flex-col gap-3 sm:flex-row">
-
-                    <div className="relative max-w-md flex-1">
-
-                        <Search size={18}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
-
-                        <input
-                        type="text"
-                        placeholder="Search orders..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full rounded-lg border border-slate-200 py-2.5 pl-10 pr-4 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"/>
-                    </div>
-                    
-                    <select
-                    value={status}
-                    onChange={(e)=>setStatus(e.target.value as OrderStatus | "All")}
-                    className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-700 outline-none focus:border-orange-500">
-
-                        <option value="All">All Status</option>
-                        <option value="Pending">Pending</option>
-                        <option value="Preparing">Preparing</option>
-                        <option value="Ready">Ready</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Cancelled">Cancelled</option>
-                    </select>
-                </div>
-             </div>
-
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
-
-              <div className="min-h-0 flex-1 overflow-auto">
-
-                <table className="w-full min-w-225">
-
-                  <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50">
-
-                    <tr>
-
-                      <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
-                        Order
-                      </th>
-
-                       <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
-                        Customer
-                      </th>
-
-                       <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
-                        Type
-                      </th>
-
-                       <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
-                        Items
-                      </th>
-
-                       <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
-                        Total
-                      </th>
-
-                      <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
-                        Status
-                      </th>
-
-                      <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-slate-100">
-
-                    {filteredOrders.map((order) => (
-                      <tr key={order.id}
-                      onClick={() => handleViewOrder(order)}
-                      className="cursor-pointer transition hover:bg-slate-50">
-
-                        <td className="px-6 py-4">
-                          <p className="font-semibold text-slate-900">
-                            {order.orderNumber}
-                          </p>
-
-                          <p className="mt-1 text-xs text-slate-400">
-                            {new Date(order.createdAt).toLocaleTimeString()}
-                          </p>
-                        </td>
-
-                        <td className="px-6 py-4 text-sm text-slate-700">
-                          {order.customerName}
-                        </td>
-
-                        <td className="px-6 py-4">
-                          <p className="text-xs text-slate-400">
-                             {order.orderType}
-                          </p>
-
-                          {order.tableNumber && (
-                            <p className="mt-1 text-xs text-slate-400">
-                              Table {order.tableNumber}
-                            </p>
-                          )}
-                        </td>
-
-                         <td className="px-6 py-4 text-sm text-slate-600">
-
-                          {order.items.reduce(
-                            (total,item) => total+item.quantity,0
-                          )}
-                         </td>
-
-                         <td className="px-6 py-4 text-sm font-semibold text-slate-900">
-                           ₹{order.total}
-                         </td>
-
-                         <td className="px-6 py-4">
-                          <span className={`rounded-full px-2.5 py-1 text-sm font-medium ${
-                            order.status === "Completed"
-                            ? "bg-emerald-50 text-emerald-600"
-                            : order.status === "Cancelled"
-                            ? "bg-red-50 text-red-600"
-                            : order.status === "Preparing"
-                            ? "bg-blue-50 text-blue-600"
-                            : "bg-amber-50 text-amber-600"
-                          }`}
-                          >
-                            {order.status}
-                          </span>
-                         </td>
-
-                         <td className="px-6 py-4 text-right">
-                          <div className="relative inline-block">
-                            <button 
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenMenuId(
-                                openMenuId === order.id ? null : order.id
-                              );
-                            }}
-                            className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700">
-                              <MoreHorizontal size={20}/>
-                            </button>
-
-                            {openMenuId === order.id && (
-                              <div className="absolute right-0 z-30 mt-2 w-44 rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg">
-                                <button 
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleViewOrder(order);
-                                }}
-                                className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
-                                  <Eye size={16}/>
-                                  View Details
-                                </button>
-
-                                <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEditOrder(order);
-                                }}
-                                className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
-                                  <Pencil size={16}/>
-                                  Edit
-                                </button>
-
-                                <button 
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteOrder(order.id);
-                                }}
-                                className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50">
-                                  <Trash2 size={16}/>
-                                  Delete
-                                </button>
-                              </div>
-                            )}
-
-                          </div>
-                         </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {filteredOrders.length === 0 && (
-
-                <div className="py-12 text-center text-sm text-slate-400">
-                  No orders found
-                </div>
-              )}
-              </div>  
-
-            {selectedOrder && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-                onClick={() => setSelectedOrder(null)}>
-
-                    <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl"
-                    onClick={(e) => e.stopPropagation()}>
-                        
-                        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-                            
-                            <div>
-                                 <h2 className="text-lg font-semibold text-slate-900">
-                                    Order {selectedOrder.orderNumber}
-                                </h2>
-
-                                <p className="mt-1 text-sm text-slate-500">
-                                    {new Date(selectedOrder.createdAt).toLocaleString()}
-                                </p>
-                            </div>
-
-                             <button
-                             type="button"
-                             onClick={() => setSelectedOrder(null)}
-                             className="rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100">
-                              <X size = {20}/>
-                            </button>
-
-                        </div>
-
-                        <div className="space-y-3 border-b border-slate-200 px-6 py-5">
-
-                           <div className="flex justify-between">
-                                <span className="text-sm text-slate-500">
-                                     Customer
-                                </span>
-
-                                <span className="text-sm font-medium text-slate-900">
-                                     {selectedOrder.customerName}
-                                </span>
-                            </div>
-
-                             <div className="flex justify-between">
-                                 <span className="text-sm text-slate-500">
-                                    Order Type
-                                </span>
-
-                                <span className="text-sm font-medium text-slate-900">
-                                     {selectedOrder.orderType}
-                                </span>
-                            </div>
-
-                               {selectedOrder.tableNumber && (
-                                
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-slate-500">
-                                        Table
-                                    </span>
-
-                                    <span className="text-sm font-medium text-slate-900">
-                                         {selectedOrder.tableNumber}
-                                    </span>
-                                </div>
-                                )}
-                                
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-slate-500">
-                                        Status
-                                    </span>
-
-                                    <select value={selectedOrder.status}
-                                    onChange={(e) =>  handleStatusChange(e.target.value as OrderStatus)}
-                                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100">
-
-                                        <option value="Pending">Pending</option>
-                                        <option value="Preparing">Preparing</option>
-                                        <option value="Ready">Ready</option>
-                                        <option value="Completed">Completed</option>
-                                        <option value="Cancelled">Cancelled</option>
-                                    </select>
-                                </div>
-                             </div>
-                             
-                             <div className="px-6 py-5">
-
-                                <h3 className="mb-4 font-semibold text-slate-900">
-                                    Order Items
-                                </h3>
-                                
-                                <div className="space-y-3">
-
-                                    {selectedOrder.items.map((item) => (
-                                        <div
-                                        key={item.menuItemId}
-                                        className="flex items-center justify-between">
-                                            
-                                            <div>
-                                                <p className="text-sm font-medium text-slate-900">
-                                                    {item.name}
-                                                </p>
-
-                                                <p className="text-xs text-slate-500">
-                                                    {item.quantity} × ₹{item.price}
-                                                </p>
-                                            </div>
-
-                                            <p className="text-sm font-semibold text-slate-900">
-                                                ₹{item.quantity * item.price}
-                                            </p>
-
-                                        </div>
-                                       ))}
-
-                                    </div>
-                                    
-                                    <div className="mt-5 flex justify-between border-t border-slate-200 pt-4">
-
-                                        <span className="font-semibold text-slate-900">
-                                            Total
-                                        </span>
-
-                                        <span className="text-lg font-bold text-orange-600">
-                                            ₹{selectedOrder.total}
-                                        </span>
-
-                                    </div>
-
-                                </div>
-                                
-                                <div className="flex justify-end border-t border-slate-100 px-6 py-4">
-
-                                    <button
-                                    type="button"
-                                    onClick={() => setSelectedOrder(null)}
-                                    className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800">
-                                        Close
-                                    </button>
-
-                                </div>
-
-                            </div>
-                        </div>
-                       )}  
-                       {editingOrder && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-                        onClick={() => setEditingOrder(null)}>
-                          <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl"
-                          onClick={(e) => e.stopPropagation()}>
-
-                            <div className="flex item-center justify-between border-b border-slate-200 px-6 py-5">
-
-                              <div>
-                                <h2 className="text-lg font-semibold text-slate-900">
-                                  Edit Order
-                                </h2>
-
-                                <p className="mt-1 text-sm text-slate-500">
-                                  {editingOrder.orderNumber}
-                                </p>
-                              </div>
-
-                              <button 
-                              type="button"
-                              onClick={() => setEditingOrder(null)}
-                              className="rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100">
-                                <X size = {20}/>
-                              </button>
-                            </div>
-
-                            <div className="space-y-5 px-6 py-6">
-
-                              <div>
-                                <label className="mb-2 block text-sm font-medium text-slate-700">
-                                  Customer Name
-                                </label>
-
-                                <input
-                                type="text"
-                                value={editingOrder.customerName}
-                                onChange={(e) => setEditingOrder({
-                                  ...editingOrder,customerName:e.target.value,
-                                })
-                              }
-                              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm  outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"/>
-                              </div>
-                              
-                              {editingOrder.orderType === "Dine In" && (
-                              <div>
-                                <label className="mb-2 block text-sm font-medium text-slate-700">
-                                  Table Number
-                                </label>
-
-                                <select
-                                value={editingOrder.tableNumber && editingOrder.tableSection
-                                  ? `${editingOrder.tableSection}::${editingOrder.tableNumber}`
-                                  : ""
-                                }
-
-                                onChange ={(e) => {
-                                  if(!e.target.value) {
-                                    setEditingOrder({
-                                      ...editingOrder,
-                                      tableNumber:undefined,
-                                      tableSection:undefined,
-                                    });
-                                    return;
-                                  }
-                                  const [selectedSection, selectedNumber] = e.target.value.split("::");
-
-                                  setEditingOrder({
-                                    ...editingOrder,
-                                    tableSection : selectedSection,
-                                    tableNumber : Number(selectedNumber),
-                                  });
-                                }}
-                                className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100">
-                                 
-                                 <option value="">Select table</option>
-
-                                 {tables.filter((table) => 
-                                table.status === "Available" ||
-                                (table.tableNumber === editingOrder.tableNumber && 
-                                  table.section === editingOrder.tableSection
-                                ))
-                                .sort((a,b) => {
-                                  if(a.section === b.section){
-                                    return a.tableNumber - b.tableNumber;
-                                  }
-                                  return a.section.localeCompare(b.section);
-                                })
-                                .map((table) => (
-                                  <option key={table.id}
-                                  value={`${table.section}::${table.tableNumber}`}>
-                                    {table.section} - Table{table.tableNumber}
-                                  </option>
-                                ))
-                                }
-                                </select>
-                              </div>
-                              )}
-
-                              <div>
-                                <label className="mb-2 block text-sm font-medium text-slate-700">
-                                  Order Type 
-                                </label>
-
-                                <select
-                                value={editingOrder.orderType}
-                                onChange={(e) => {
-                                  const newOrderType = e.target.value as Order["orderType"];
-                                  setEditingOrder({
-                                  ...editingOrder,
-                                  orderType:newOrderType,
-                                  tableNumber :newOrderType === "Dine In" ? editingOrder.tableNumber : undefined,
-                                  tableSection:newOrderType === "Dine In" ? editingOrder.tableSection : undefined,
-                                })
-                              }}
-                              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100">
-                                <option value="Dine In">Dine In</option>
-                                <option value="Takeaway">Takeaway</option>
-                                <option value="Delivery">Delivery</option>
-                              </select>
-                              </div>
-
-                              <div>
-                                <label className="mb-2 block text-sm font-medium text-slate-700">
-                                  Status
-                                </label>
-
-                                <select
-                                value={editingOrder.status}
-                                onChange={(e) => setEditingOrder({
-                                  ...editingOrder,
-                                  status:e.target.value as OrderStatus,
-                                  orderStatus: e.target.value as OrderStatus,
-                                })
-                              }
-                              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100">
-                                <option value="Pending">Pending</option>
-                                <option value="Preparing">Preparing</option>
-                                <option value="Ready">Ready</option>
-                                <option value="Completed">Completed</option>
-                                <option value="Cancelled">Cancelled</option>
-                              </select>
-                              </div>
-                            </div>
-
-                            <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4">
-                              <button
-                              type="button"
-                              onClick={() => setEditingOrder(null)}
-                              className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-meidum text-slate-700 hover:bg-slate-50">
-                                Cancel
-                              </button>
-
-                              <button
-                              type="button"
-                              onClick={() => {
-                                  const originalOrder = orders.find(
-                                    (order) => order.id === editingOrder.id
-                                  );
-                                  if(
-                                    originalOrder?.tableNumber && 
-                                    originalOrder?.tableSection &&
-                                   (
-                                    editingOrder.orderType !== "Dine In" ||
-                                    originalOrder.tableNumber != editingOrder.tableNumber ||
-                                    originalOrder.tableSection !== editingOrder.tableSection
-                                  )
-                                  ) {
-                                    const oldTable = tables.find(
-                                      (table) => 
-                                        table.tableNumber === originalOrder.tableNumber &&
-                                        table.section === originalOrder.tableSection
-                                    );
-                                    if(oldTable) {
-                                      updateTableStatus(oldTable.id,"Available");
-                                    }
-                                  }
-                                  if(
-                                    editingOrder.orderType === "Dine In" &&
-                                    editingOrder.tableNumber &&
-                                    editingOrder.tableSection
-                                  ){
-                                  const newTable = tables.find(
-                                    (table) => 
-                                      table.tableNumber === editingOrder.tableNumber && 
-                                    table.section === editingOrder.tableSection
-                                  );
-                                  if(newTable){
-                                    updateTableStatus(newTable.id,"Reserved");
-                                  }
-                                }
-                                updateOrder(editingOrder);
-                                setEditingOrder(null);
-                              }}
-                              className="rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-600">
-                                Save Changes
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                       )}
-        </div>
-    );
+
+    return matchesSearch && matchesStatus &&
+     matchesSection && matchesDate;
+  });
+
+  const handleViewOrder = (order: Order) => {
+    setSelectedOrder(order);
+  };
+
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, minHeight: 0 }}>
+      <Box>
+        <Typography variant="h1">Orders</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Manage Resturant Orders
+        </Typography>
+      </Box>
+
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, gap: 2 }}>
+          <TextField
+            size="small"
+            placeholder="Search orders..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            sx={{ maxWidth: 360, flex: 1 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+              endAdornment: search && (
+                <InputAdornment position="end">
+                  <IconButton
+                  size="small"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  edge="end">
+                    <CloseIcon fontSize="small"/>
+                  </IconButton>
+                </InputAdornment>
+              )
+            }}
+          />
+          <TextField
+            select
+            size="small"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as OrderStatus | "All")}
+            sx={{ minWidth: 180 }}
+          >
+            <MenuItem value="All">All Status</MenuItem>
+            <MenuItem value="Pending">Pending</MenuItem>
+            <MenuItem value="Preparing">Preparing</MenuItem>
+            <MenuItem value="Ready">Ready</MenuItem>
+            <MenuItem value="Completed">Completed</MenuItem>
+            <MenuItem value="Cancelled">Cancelled</MenuItem>
+          </TextField>
+
+          <TextField
+          select
+          size="small"
+          label="Section"
+          value={section}
+          onChange={(event) => setSection(event.target.value)}
+          sx={{minWidth:180}}
+          >
+            <MenuItem value="All">All Sections</MenuItem>
+            <MenuItem value="Indoor">Indoor</MenuItem>
+            <MenuItem value="Outdoor">Outdoor</MenuItem>
+            <MenuItem value="Private">Private</MenuItem>
+          </TextField>
+        </Box>
+      </Paper>
+
+      <Paper 
+      variant="outlined"
+      sx={{
+        px:2,
+        py:1.5,
+        display:"flex",
+        alignItems:"center",
+        justifyContent:"space-between",
+        gap:2,
+        flexWrap:"wrap",
+      }}
+      >
+        <Box>
+          <Typography variant="subtitle1" fontWeight={600}>
+            Order History
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            View Orders by date
+          </Typography>
+        </Box>
+
+        <TextField
+        select
+        size="small"
+        label="Date range"
+        value={dateRange}
+        onChange={(e) => setDateRange(e.target.value)}
+        sx={{minWidth:180}}
+        >
+          <MenuItem value="Today">Today</MenuItem>
+          <MenuItem value="Yesterday">Yesterday</MenuItem>
+          <MenuItem value="Last 7 Days">Last 7 Days</MenuItem>
+          <MenuItem value="Last 30 Days">Last 30 Days</MenuItem>
+          <MenuItem value="Custom Range">Custom Range</MenuItem>
+        </TextField>
+
+        {dateRange === "Custom Range" && (
+          <Box
+          sx={{
+            display:"flex",
+            gap:1.5,
+            flexWrap:"wrap",
+          }}
+          >
+            <TextField
+            size="small"
+            label="From"
+            type="date"
+            value={customStart}
+            onChange={(e) => setCustomStart(e.target.value)}
+            slotProps={{inputLabel:{shrink:true}}}
+            />
+
+            <TextField
+            size="small"
+            label="To"
+            type="date"
+            value={customEnd}
+            onChange={(e) => setCustomEnd(e.target.value)}
+            slotProps={{inputLabel:{shrink:true}}}
+            />
+          </Box>
+        )}
+      </Paper>
+
+      <Paper
+        variant="outlined"
+        sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}
+      >
+        <TableContainer sx={{ flex: 1 }}>
+          <Table stickyHeader sx={{ minWidth: 900 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell>Order</TableCell>
+                <TableCell>Customer</TableCell>
+                <TableCell>Section</TableCell>
+                <TableCell>Type</TableCell>
+                <TableCell>Items</TableCell>
+                <TableCell>Total</TableCell>
+                <TableCell>Status</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredOrders.map((order) => (
+                <TableRow
+                  key={order.id}
+                  hover
+                  onClick={() => handleViewOrder(order)}
+                  sx={{ cursor: "pointer" }}
+                >
+                  <TableCell>
+                    <Typography variant="body2" fontWeight={600}>
+                      {order.orderNumber}
+                    </Typography>
+
+                    <Typography variant="caption" color="text.secondary">
+                      {new Date(order.createdAt).toLocaleTimeString()}
+                    </Typography>
+                  </TableCell>
+
+                  <TableCell>
+                    <Typography variant="body2">{order.customerName}</Typography>
+                  </TableCell>
+
+                  <TableCell>
+                    <Typography variant="caption" color="text.secondary">
+                      {order.orderType === "Dine In"
+                      ? order.tableSection || "-"
+                      : order.orderType === "Takeaway"
+                      ? "Takeaway"
+                      : "-"
+                      }
+                    </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                       <Typography variant="caption" color="text.secondary" display="block">
+                        {order.orderType}
+                       </Typography>
+
+                    {order.tableNumber && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Table {order.tableNumber}
+                      </Typography>
+                    )}
+                  </TableCell>
+
+                  <TableCell>
+                    <Typography variant="body2">
+                      {order.items.reduce((total, item) => total + item.quantity, 0)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight={600}>
+                      ₹{order.total}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={order.status}
+                      color={getStatusColor(order.status)}
+                      size="small"
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        {filteredOrders.length === 0 && (
+          <Box sx={{ py: 6, textAlign: "center" }}>
+            <Typography variant="body2" color="text.secondary">
+              No orders found
+            </Typography>
+          </Box>
+        )}
+      </Paper>
+
+
+      <Dialog
+        open={Boolean(selectedOrder)}
+        onClose={() => setSelectedOrder(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        {selectedOrder && (
+          <>
+            <DialogTitle
+              sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}
+            >
+              <Box>
+                <Typography variant="h3">Order {selectedOrder.orderNumber}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  {new Date(selectedOrder.createdAt).toLocaleString()}
+                </Typography>
+              </Box>
+              <IconButton onClick={() => setSelectedOrder(null)} size="small">
+                <CloseIcon />
+              </IconButton>
+            </DialogTitle>
+
+            <DialogContent dividers>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 3 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Customer
+                  </Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {selectedOrder.customerName}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Order Type
+                  </Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {selectedOrder.orderType}
+                  </Typography>
+                </Box>
+
+                {selectedOrder.tableNumber && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Table
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {selectedOrder.tableNumber}
+                    </Typography>
+                  </Box>
+                )}
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Status
+                  </Typography>
+                  <Typography 
+                  variant="body2"
+                  sx={{
+                    fontWeight: 600,
+                    color:
+                    selectedOrder.status === "Completed"
+                    ? "success.main"
+                    : selectedOrder.status === "Cancelled"
+                    ? "error.main"
+                    : "warning.dark",
+                  }}>
+                    {selectedOrder.status}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
+                Order Items
+              </Typography>
+
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                {selectedOrder.items.map((item) => (
+                  <Box
+                    key={item.menuItemId}
+                    sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                  >
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>
+                        {item.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {item.quantity} × ₹{item.price}
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" fontWeight={600}>
+                      ₹{item.quantity * item.price}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  mt: 2.5,
+                  pt: 2,
+                  borderTop: 1,
+                  borderColor: "divider",
+                }}
+              >
+                <Typography fontWeight={600}>Total</Typography>
+                <Typography variant="h6" color="primary.main" fontWeight={700}>
+                  ₹{selectedOrder.total}
+                </Typography>
+              </Box>
+            </DialogContent>
+
+            <DialogActions>
+              <Button
+                variant="contained"
+                color="inherit"
+                onClick={() => setSelectedOrder(null)}
+                sx={{ bgcolor: "text.primary", color: "common.white", "&:hover": { bgcolor: "grey.800" } }}
+              >
+                Close
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+
+      <Dialog
+        open={Boolean(editingOrder)}
+        onClose={() => setEditingOrder(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        {editingOrder && (
+          <>
+            <DialogTitle
+              sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}
+            >
+              <Box>
+                <Typography variant="h3">Edit Order</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  {editingOrder.orderNumber}
+                </Typography>
+              </Box>
+              <IconButton onClick={() => setEditingOrder(null)} size="small">
+                <CloseIcon />
+              </IconButton>
+            </DialogTitle>
+
+            <DialogContent dividers>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+                <TextField
+                  fullWidth
+                  label="Customer Name"
+                  value={editingOrder.customerName}
+                  onChange={(e) =>
+                    setEditingOrder({
+                      ...editingOrder,
+                      customerName: e.target.value,
+                    })
+                  }
+                />
+
+                {editingOrder.orderType === "Dine In" && (
+                  <TextField
+                    select
+                    fullWidth
+                    label="Table Number"
+                    value={
+                      editingOrder.tableNumber && editingOrder.tableSection
+                        ? `${editingOrder.tableSection}::${editingOrder.tableNumber}`
+                        : ""
+                    }
+                    onChange={(e) => {
+                      if (!e.target.value) {
+                        setEditingOrder({
+                          ...editingOrder,
+                          tableNumber: undefined,
+                          tableSection: undefined,
+                        });
+                        return;
+                      }
+                      const [selectedSection, selectedNumber] = e.target.value.split("::");
+
+                      setEditingOrder({
+                        ...editingOrder,
+                        tableSection: selectedSection,
+                        tableNumber: Number(selectedNumber),
+                      });
+                    }}
+                  >
+                    <MenuItem value="">Select table</MenuItem>
+                    {tables
+                      .filter(
+                        (table) =>
+                          table.status === "Available" ||
+                          (table.tableNumber === editingOrder.tableNumber &&
+                            table.section === editingOrder.tableSection)
+                      )
+                      .sort((a, b) => {
+                        if (a.section === b.section) {
+                          return a.tableNumber - b.tableNumber;
+                        }
+                        return a.section.localeCompare(b.section);
+                      })
+                      .map((table) => (
+                        <MenuItem
+                          key={table.id}
+                          value={`${table.section}::${table.tableNumber}`}
+                        >
+                          {table.section} - Table{table.tableNumber}
+                        </MenuItem>
+                      ))}
+                  </TextField>
+                )}
+
+                <TextField
+                  select
+                  fullWidth
+                  label="Order Type"
+                  value={editingOrder.orderType}
+                  onChange={(e) => {
+                    const newOrderType = e.target.value as Order["orderType"];
+                    setEditingOrder({
+                      ...editingOrder,
+                      orderType: newOrderType,
+                      tableNumber: newOrderType === "Dine In" ? editingOrder.tableNumber : undefined,
+                      tableSection: newOrderType === "Dine In" ? editingOrder.tableSection : undefined,
+                    });
+                  }}
+                >
+                  <MenuItem value="Dine In">Dine In</MenuItem>
+                  <MenuItem value="Takeaway">Takeaway</MenuItem>
+                  <MenuItem value="Delivery">Delivery</MenuItem>
+                </TextField>
+
+                <TextField
+                  select
+                  fullWidth
+                  label="Status"
+                  value={editingOrder.status}
+                  onChange={(e) =>
+                    setEditingOrder({
+                      ...editingOrder,
+                      status: e.target.value as OrderStatus,
+                      orderStatus: e.target.value as OrderStatus,
+                    })
+                  }
+                >
+                  <MenuItem value="Pending">Pending</MenuItem>
+                  <MenuItem value="Preparing">Preparing</MenuItem>
+                  <MenuItem value="Ready">Ready</MenuItem>
+                  <MenuItem value="Completed">Completed</MenuItem>
+                  <MenuItem value="Cancelled">Cancelled</MenuItem>
+                </TextField>
+              </Box>
+            </DialogContent>
+
+            <DialogActions>
+              <Button onClick={() => setEditingOrder(null)}>Cancel</Button>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  const originalOrder = orders.find((order) => order.id === editingOrder.id);
+                  if (
+                    originalOrder?.tableNumber &&
+                    originalOrder?.tableSection &&
+                    (editingOrder.orderType !== "Dine In" ||
+                      originalOrder.tableNumber != editingOrder.tableNumber ||
+                      originalOrder.tableSection !== editingOrder.tableSection)
+                  ) {
+                    const oldTable = tables.find(
+                      (table) =>
+                        table.tableNumber === originalOrder.tableNumber &&
+                        table.section === originalOrder.tableSection
+                    );
+                    if (oldTable) {
+                      updateTableStatus(oldTable.id, "Available");
+                    }
+                  }
+                  if (
+                    editingOrder.orderType === "Dine In" &&
+                    editingOrder.tableNumber &&
+                    editingOrder.tableSection
+                  ) {
+                    const newTable = tables.find(
+                      (table) =>
+                        table.tableNumber === editingOrder.tableNumber &&
+                        table.section === editingOrder.tableSection
+                    );
+                    if (newTable) {
+                      updateTableStatus(newTable.id, "Reserved");
+                    }
+                  }
+                  updateOrder(editingOrder);
+                  setEditingOrder(null);
+                }}
+              >
+                Save Changes
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+    </Box>
+  );
 };
 
 export default OrdersPage;
-
-   

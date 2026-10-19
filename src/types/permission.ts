@@ -4,7 +4,6 @@ export type Permission =
   | "orders"
   | "reservations"
   | "billing"
-  | "customers"
   | "menu"
   | "reports"
   | "staff"

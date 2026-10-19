@@ -1,9 +1,21 @@
 import { useState } from "react";
-import { KeyRound, LogIn, Mail, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Alert from "@mui/material/Alert";
+import InputAdornment from "@mui/material/InputAdornment";
+import EmailIcon from "@mui/icons-material/Email";
+import LockIcon from "@mui/icons-material/Lock";
+import LoginIcon from "@mui/icons-material/Login";
+import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 
 import { useStaff } from "../context/StaffContext";
 import { useAuth } from "../context/AuthContext";
+
 
 const LoginPage = () => {
   const { staff } = useStaff();
@@ -14,15 +26,14 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  const activeStaff = staff.filter(
-    (member) => member.status === "Active"
-  );
+  const activeStaff = staff.filter((member) => member.status === "Active");
 
   const handleLogin = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoginError("");
 
     const normalizedEmail = email.trim().toLowerCase();
+
     const selectedStaff = activeStaff.find(
       (member) => member.email.trim().toLowerCase() === normalizedEmail
     );
@@ -39,85 +50,128 @@ const LoginPage = () => {
       role: selectedStaff.role,
     });
 
+    if(selectedStaff.mustResetPassword){
+      navigate("/reset-password?mode=first-time", {replace: true});
+      return;
+    }
+
     navigate("/dashboard", { replace: true });
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-orange-600 px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
-
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-600 text-white">
-            <ShieldCheck size={28} />
-          </div>
-
-          <h1 className="text-2xl font-bold text-slate-900">
-            RestruHub
-          </h1>
-
-          <p className="mt-1 text-sm text-slate-500">
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        bgcolor: "primary.main",
+        px: 2,
+      }}
+    >
+      <Paper elevation={8} sx={{ width: "100%", maxWidth: 420, p: 4, borderRadius: 3 }}>
+        <Box sx={{ textAlign: "center", mb: 4 }}>
+          <Box
+            sx={{
+              mx: "auto",
+              mb: 2,
+              width: 56,
+              height: 56,
+              borderRadius: 3,
+              bgcolor: "primary.main",
+              color: "white",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <VerifiedUserIcon fontSize="large" />
+          </Box>
+          <Typography variant="h1">RestruHub</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Restaurant Management System
-          </p>
-        </div>
+          </Typography>
+        </Box>
 
         {user && (
-          <div className="mb-5 rounded-lg border border-orange-100 bg-orange-50 px-4 py-3 text-sm text-orange-800">
-            Signed in as <span className="font-semibold">{user.name}</span>. Sign in with another staff account to switch.
-          </div>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Signed in as <strong>{user.name}</strong>. Sign in with another staff account to switch.
+          </Alert>
         )}
 
-        <form onSubmit={handleLogin}>
-          <label htmlFor="login-email" className="mb-2 block text-sm font-medium text-slate-700">
-            Email
-          </label>
-          <div className="relative mb-4">
-            <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              id="login-email"
-              type="email"
-              autoComplete="username"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@restaurant.com"
-              className="w-full rounded-lg border border-slate-300 bg-white py-3 pl-10 pr-4 text-sm outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-            />
-          </div>
+        <Box component="form" onSubmit={handleLogin}>
+          <TextField
+            fullWidth
+            required
+            type="email"
+            label="Email"
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@restaurant.com"
+            sx={{ mb: 2 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <EmailIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
+          />
 
-          <label htmlFor="login-password" className="mb-2 block text-sm font-medium text-slate-700">
-            Password
-          </label>
-          <div className="relative">
-            <KeyRound size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              id="login-password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Enter your password"
-              className="w-full rounded-lg border border-slate-300 bg-white py-3 pl-10 pr-4 text-sm outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-            />
-          </div>
+          <TextField
+            fullWidth
+            required
+            type="password"
+            label="Password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter your password"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <LockIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
+          />
 
           {loginError && (
-            <p role="alert" className="mt-3 text-sm font-medium text-red-600">
+            <Alert severity="error" sx={{ mt: 2 }}>
               {loginError}
-            </p>
+            </Alert>
           )}
 
-          <button
+          <Box sx={{display:"flex", justifyContent: "flex-end", mt:1}}>
+            <Typography
+            component={Link}
+            to="/forgot-password"
+            variant="body2"
+            sx={{
+              color: "primary.main",
+              textDecoration: "none",
+              "&:hover":{textDecoration: "underline"},
+            }}
+            >
+              Forgot Password?
+            </Typography>
+          </Box>
+
+          <Button
             type="submit"
+            fullWidth
+            variant="contained"
+            size="large"
+            startIcon={<LoginIcon />}
             disabled={!email.trim() || !password}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            sx={{ mt: 3 }}
           >
-            <LogIn size={18} />
             Sign In
-          </button>
-        </form>
-      </div>
-    </div>
+          </Button>
+        </Box>
+      </Paper>
+    </Box>
   );
 };
 

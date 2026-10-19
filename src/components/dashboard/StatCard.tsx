@@ -1,43 +1,52 @@
-interface StatCardProps{
-    title: string;
-    value: string;
-    change: string;
-    icon: React.ReactNode;
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+
+interface StatCardProps {
+  title: string;
+  value: string;
+  change: string;
+  icon: React.ReactNode;
 }
 
-const StatCard = ({
-    title,
-    value,
-    change,
-    icon,
-}:StatCardProps) => {
-    return (
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-
-            <div className="flex items-start justify-between">
-
-                <div>
-                    <p className="text-sm text-slate-500">
-                        {title}
-                    </p>
-
-                    <h3 className="mt-2 text-2xl font-bold text-slate-900">
-                        {value}
-                    </h3>
-                </div>
-
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
-                    {icon}
-                </div>
-            </div>
-
-            <p className="mt-4 text-xs font-medium text-green-600">
-                ↑ {change}
-                <span className="ml-1 font-normal text-slate-400">
-                    from last week
-                </span>
-            </p>
-        </div>
-    );
+const StatCard = ({ title, value, change, icon }: StatCardProps) => {
+  return (
+    <Card variant="outlined" sx={{ height: "100%" }}>
+      <CardContent>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <Box>
+            <Typography variant="body2" color="text.secondary">
+              {title}
+            </Typography>
+            <Typography variant="h4" fontWeight={700} sx={{ mt: 1, fontSize: "1.5rem" }}>
+              {value}
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: 1,
+              bgcolor: "primary.light",
+              color: "primary.main",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {icon}
+          </Box>
+        </Box>
+        <Typography variant="caption" color="success.main" fontWeight={600} sx={{ mt: 2, display: "block" }}>
+          ↑ {change}
+          <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5, fontWeight: 400 }}>
+            from last week
+          </Typography>
+        </Typography>
+      </CardContent>
+    </Card>
+  );
 };
+
 export default StatCard;

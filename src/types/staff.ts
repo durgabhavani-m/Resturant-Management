@@ -1,7 +1,4 @@
-export type StaffRole = 
-| "Admin"
-| "Dine-in Staff"
-| "Counter Staff";
+export type StaffRole = string;
 
 export type StaffStatus = "Active" | "Inactive";
 
@@ -13,5 +10,8 @@ export interface Staff{
     role:StaffRole;
     status: StaffStatus;
     createdAt:string;
+
     password?: string;
+    passwordSet?: boolean;
+    mustResetPassword?: boolean;
 }
