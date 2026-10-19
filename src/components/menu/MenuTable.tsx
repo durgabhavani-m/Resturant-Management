@@ -1,248 +1,357 @@
-import {MoreHorizontal, X} from "lucide-react";
-import type {MenuItem} from "../../types/menu";
-import {useMenu} from "../../context/MenuContext";
-import {useState} from "react";
+import { useState } from "react";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import Paper from "@mui/material/Paper";
+import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
+import Box from "@mui/material/Box";
+import TableSortLabel from "@mui/material/TableSortLabel";
+import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
+import CloseIcon from "@mui/icons-material/Close";
 
-interface MenuTableProps{
-    items:MenuItem[];
-    onEdit:(item:MenuItem) => void;
-    onDelete:(item:MenuItem) => void;
+import type { MenuItem as MenuItemType } from "../../types/menu";
+import { useMenu } from "../../context/MenuContext";
+import { useModifiers } from "../../context/ModifierContext";
+import { usePersistentState } from "../../hooks/usePersistentState";
 
+type SortDirection = "asc" | "desc";
+type SortColumn = "item" | "price";
+
+interface MenuTableProps {
+  items: MenuItemType[];
+  itemSortDirection: SortDirection;
+  priceSortDirection: SortDirection;
+  activeSortColumn: SortColumn;
+  onItemSort: () => void;
+  onPriceSort: () => void;
+  onEdit: (item: MenuItemType) => void;
+  onDelete: (item: MenuItemType) => void;
 }
 
-const MenuTable = ({items, onEdit, onDelete} : MenuTableProps) => {
-    const {toggleAvailability} = useMenu();
-    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-    const [selectedItem, setSelectedItem] =useState<MenuItem | null>(null);
+const MenuTable = ({
+  items,
+  itemSortDirection,
+  priceSortDirection,
+  activeSortColumn,
+  onItemSort,
+  onPriceSort,
+  onEdit,
+  onDelete,
+}: MenuTableProps) => {
+  const { categoryMetadata } = useMenu();
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [menuItem, setMenuItem] = useState<MenuItemType | null>(null);
+  const [selectedItemId, setSelectedItemId] = usePersistentState<
+  string | number | null
+>("menu_table_selected_item_id", null);
 
-    return(
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+const selectedItem =
+  items.find((item) => String(item.id) === String(selectedItemId)) ?? null;
 
-            <div className="min-h-0 flex-1 overflow-auto">
+  const { modifierGroups} = useModifiers();
 
-                <table className="w-full min-w-200">
-                    <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50">
-                        <tr>
-                            <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
-                                Item
-                            </th>
+  const openMenu = (event: React.MouseEvent<HTMLElement>, item: MenuItemType) => {
+    setAnchorEl(event.currentTarget);
+    setMenuItem(item);
+  };
 
-                            <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
-                                Category
-                            </th>
+  const closeMenu = () => {
+    setAnchorEl(null);
+    setMenuItem(null);
+  };
 
-                            <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
-                                Price
-                            </th>
+  return (
+    <Paper variant="outlined" sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <TableContainer sx={{ flex: 1 }}>
+        <Table stickyHeader size="medium">
+          <TableHead>
+            <TableRow>
+              <TableCell>
 
-                            <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
-                                Status
-                            </th>
+                <TableSortLabel
+                  active={activeSortColumn === "item"}
+                  direction={itemSortDirection}
+                  onClick={onItemSort}
+                  aria-label={`Sort item names ${itemSortDirection === "asc" ? "ascending" : "descending"}`}
+                >
+                  Item
+                </TableSortLabel>
 
-                            <th className="px-6 py-4 text-left text-sm font-semibold uppercase text-slate-500">
-                                Actions
-                            </th>
-                        </tr>
-                    </thead>
+              </TableCell>
+              <TableCell>Category</TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={activeSortColumn === "price"}
+                  direction={priceSortDirection}
+                  onClick={onPriceSort}
+                  aria-label={`Sort prices ${priceSortDirection === "asc" ? "ascending" : "descending"}`}
+                >
+                  Price
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>Stock Status</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {items.map((item) => (
+              <TableRow key={item.id} hover>
+                <TableCell>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                    {item.foodType && (
+                      <Box
+                        role="img"
+                        aria-label={
+                          item.foodType === "Veg"
+                            ? "Vegetarian"
+                            : "Non-vegetarian"
+                        }
+                        title={
+                          item.foodType === "Veg"
+                            ? "Vegetarian"
+                            : "Non-vegetarian"
+                        }
+                        sx={{
+                          width: 14,
+                          height: 14,
+                          border: "1.5px solid",
+                          borderColor:
+                            item.foodType === "Veg" ? "success.main" : "error.main",
+                          borderRadius: 0.25,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flex: "0 0 auto",
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            bgcolor:
+                              item.foodType === "Veg"
+                                ? "success.main"
+                                : "error.main",
+                          }}
+                        />
+                      </Box>
+                    )}
+                    <Typography variant="body2" fontWeight={600}>
+                      {item.name}
+                    </Typography>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    {item.description}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography variant="body2">{item.category}</Typography>
+                  </Box>
+                </TableCell>
+                <TableCell>
+                  <Typography fontWeight={600}>₹{item.price}</Typography>
+                </TableCell>
+                <TableCell>
+                  {(() => {
+                    const categoryKey = item.category
+                    .trim()
+                    .replace(/\s+/g, " ")
+                    .toLowerCase();
 
-                    <tbody className="divide-y divide-slate-100">
-                        {items.map((item)=>(
-                            <tr 
-                            key={item.id}
-                            className="transition hover:bg-slate-50">
+                    const isCategoryUnavailable = 
+                        categoryMetadata[categoryKey]?.status === "Inactive";
 
-                                <td className="px-6 py-4">
+                    const status = isCategoryUnavailable
+                    ? "Category Unavailable"
+                    : item.stockStatus === "Out of Stock"
+                    ? "Out of Stock"
+                    : "Available";
 
-                                    <p className="font-medium text-slate-900">
-                                        {item.name}
-                                    </p>
+                    return (
+                      <Chip
+                      label={status}
+                      color={
+                        status === "Available"
+                        ? "success"
+                        : "error"
+                      }
+                      size="small"
+                      />
+                    )
+                  })()} 
+                </TableCell>
+                <TableCell>
+                  <IconButton size="small" onClick={(e) => openMenu(e, item)}>
+                    <MoreHorizIcon />
+                  </IconButton>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
-                                    <p className="mt-1 text-xs text-slate-400">
-                                        {item.description}
-                                    </p>
-                                </td>
+      {items.length === 0 && (
+        <Box sx={{ py: 6, textAlign: "center" }}>
+          <Typography color="text.secondary">No menu items found.</Typography>
+        </Box>
+      )}
 
-                                <td className="px-6 py-4 text-sm text-slate-600">
-                                    {item.category}
-                                </td>
+      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={closeMenu}>
+        <MenuItem
+          onClick={() => {
+            if (menuItem){
+              setSelectedItemId(menuItem.id);
+            }
+            closeMenu();
+          }}
+        >
+          View Details
+        </MenuItem>
+  
+          <MenuItem
+          onClick={() => {
+            if (menuItem) onEdit(menuItem);
+            closeMenu();
+          }}
+        >
+          Edit
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menuItem) onDelete(menuItem);
+            closeMenu();
+          }}
+          sx={{ color: "error.main" }}
+        >
+          Delete
+        </MenuItem>
+      </Menu>
 
-                                <td className="px-6 py-4 text-sm font-semibold text-slate-900">
-                                    ₹{item.price}
-                                </td>
+      <Dialog 
+      open={Boolean(selectedItemId && selectedItem)} 
+      onClose={() => setSelectedItemId(null)} 
+      fullWidth 
+      maxWidth="sm">
+        {selectedItem && (
+          <>
+            <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <Box>
+                <Typography variant="h3">{selectedItem.name}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Menu Item Details
+                </Typography>
+              </Box>
+              <IconButton onClick={() => setSelectedItemId(null)} size="small">
+                <CloseIcon />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent dividers>
+              <DetailRow label="Name" value={selectedItem.name} />
+              <DetailRow label="Category" value={selectedItem.category} />
+              <DetailRow label="Price" value={`₹${selectedItem.price}`} highlight />
+              <DetailRow
+                label="Stock Status"
+                value={(() => {
+                  const categoryKey = selectedItem.category
+                  .trim()
+                  .replace(/\s+/g,"")
+                  .toLowerCase();
 
-                                <td className="px-6 py-4">
+                  const isCategoryUnavailable = 
+                  categoryMetadata[categoryKey]?.status === "Inactive";
 
-                                    <button
-                                    type="button"
-                                    onClick={() => toggleAvailability(item.id)} 
-                                    className={`rounded-full px-2.5 py-1 text-sm font-medium ${
-                                        item.isAvailable
-                                        ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                                        : "bg-red-50 text-red-600 hover:bg-red-100"
-                                    }`}
-                                    >
-                                        {item.isAvailable
-                                         ? "Available" : "Out of stock"}
-                                    </button>
-                                </td>
+                  if(isCategoryUnavailable){
+                    return "Category Unavailable";
+                  }
 
-                                <td className = "px-6 py-4 text-left">
+                  return selectedItem.stockStatus === "Out of Stock"
+                  ? "Out of Stock"
+                  : "Available";
+                })()}
+              />
 
-                                    <div className="relative inline-block">
+              <DetailRow
+                label="Availability"
+                value={selectedItem.isAvailable ? "Available" : "Unavailable"}
+              />
 
-                                        <button
-                                        type="button"
-                                        title="Actions"
-                                        onClick={() =>
-                                            setOpenMenuId(
-                                                openMenuId === item.id ? null :item.id
-                                            )
-                                        }
-                                        className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700">
+              <Box sx={{ mt:2 }}>
+                <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{mb:1}}>
+                  Modifier Groups
+                </Typography>
 
-                                            <MoreHorizontal size = {20}/>
-                                        </button>
-                                        
-                                        {openMenuId === item.id && (
-                                        <div className="absolute right-0 z-10 mt-2 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                                            <button
-                                            type="button"
-                                            onClick={() => {
-                                                setSelectedItem(item);
-                                                setOpenMenuId(null)
-                                            }}
-                                            className="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
-                                                View Details
-                                            </button>
+                <Box sx={{display: "flex", flexwrap: "wrap", gap:1}}>
+                  {modifierGroups
+                  .filter((group) => 
+                  (selectedItem.modifierGroupIds ?? []).includes(group.id) &&
+                  (group.isAvailable ?? true)
+                  )
+                  .map((group) => (
+                    <Chip
+                    key={group.id}
+                    label={group.name}
+                    size="small"
+                    variant="outlined"
+                    />
+                  ))
+                  }
+                </Box>
 
-                                            <button
-                                            type="button"
-                                            onClick={() =>{
-                                                onEdit(item);
-                                                setOpenMenuId(null);
-                                            }}
-                                            className="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
-                                                Edit
-                                            </button>
+                {modifierGroups.filter((group) => 
+                (selectedItem.modifierGroupIds ?? []).includes(group.id)
+                ).length === 0 && (
+                  <Typography variant="body2" color="text.secondary" >
+                    No modifier groups assigned
+                  </Typography>
+                )}
+              </Box>
 
-                                            <button
-                                            type="button"
-                                            onClick = {() => {
-                                                onDelete(item);
-                                                setOpenMenuId(null);
-                                            }}
-                                            className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-60">
-                                                Delete
-                                            </button>
-                                        </div>
-                                        )}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            {items.length === 0 && (
-                <div className="py-12 text-center text-sm text-slate-400">
-                    No menu items found.
-                </div>
-            )}
-
-            {selectedItem && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-                onClick={() => setSelectedItem(null)}>
-                    
-                    <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl"
-                    onClick={(e) => e.stopPropagation()}>
-
-                        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-
-                            <div>
-                                <h2 className="text-lg font-semibold text-slate-900">
-                                    {selectedItem.name}
-                                </h2>
-
-                                <p className="mt-1 text-sm text-slate-500">
-                                    Menu Item Details
-                                </p>
-                            </div>
-
-                            <button
-                            type="button"
-                            onClick={() => setSelectedItem(null)}
-                            className="rounded-lg p-2 text-slate-400 hover:bg-orange-500 hover:text-slate-700">
-                                <X size ={18}/>
-                            </button>
-                        </div>
-
-                        <div className="space-y-4 px-6 py-5">
-
-                            <div className="flex justify-between">
-                                <span className="text-sm text-slate-500">
-                                    Name
-                                </span>
-
-                                <span className="text-sm font-medium text-slate-900">
-                                    {selectedItem.name}
-                                </span>
-                            </div>
-
-                            <div className="flex justify-between">
-                                <span className="text-sm text-slate-500">
-                                    Category
-                                </span>
-
-                                <span className="text-sm font-medium text-slate-900">
-                                    {selectedItem.category}
-                                </span>
-                            </div>
-
-                            <div className="flex justify-between">
-                                <span className="text-sm text-slate-500">
-                                    Price
-                                </span>
-
-                                <span className="text-sm font-semibold text-orange-600">
-                                    ₹{selectedItem.price}
-                                </span>
-                            </div>
-
-                            <div className="flex justify-between">
-                                <span className="text-sm text-slate-500">
-                                    Status
-                                </span>
-
-                                <span className="text-sm font-medium text-slate-900">
-                                    {selectedItem.isAvailable ? "Available" : "Out of stock"}
-                                </span>
-                            </div>
-
-                            <div>
-                                <p className="mb-1 text-sm text-slate-500">
-                                    Description
-                                </p>
-
-                                <p className="text-sm text-slate-700">
-                                    {selectedItem.description}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end border-t border-slate-100 px-6 py-4">
-
-                            <button
-                            type="button"
-                            onClick={() =>  setSelectedItem(null)}
-                            className="rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800">
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                  Description
+                </Typography>
+                <Typography variant="body2">{selectedItem.description}</Typography>
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button variant="contained" onClick={() => setSelectedItemId(null)}>
+                Close
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+    </Paper>
+  );
 };
+
+const DetailRow = ({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) => (
+  <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1.5 }}>
+    <Typography variant="body2" color="text.secondary">
+      {label}
+    </Typography>
+    <Typography variant="body2" fontWeight={600} color={highlight ? "primary.main" : "text.primary"}>
+      {value}
+    </Typography>
+  </Box>
+);
+
 export default MenuTable;

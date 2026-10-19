@@ -1,11 +1,20 @@
-import {createContext,useContext,useEffect,useState }from "react";
-import type { RestaurantTable, TableStatus} from "../types/table";
-import {getNextRecordId, normalizeRecordId} from "../utils/recordIds";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+
+import type { RestaurantTable, TableStatus } from "../types/table";
+import {
+  getNextRecordId,
+  normalizeRecordId,
+} from "../utils/recordIds";
 
 const TABLE_STORAGE_KEY = "restaurant_tables";
 
-const initialTables:RestaurantTable[]=[
-    {
+const initialTables: RestaurantTable[] = [
+  {
     id: "TABLE-1",
     tableNumber: 1,
     capacity: 2,
@@ -42,93 +51,136 @@ const initialTables:RestaurantTable[]=[
   },
 ];
 
-interface TableContextType{
-    tables:RestaurantTable[];
-    setTables:React.Dispatch<React.SetStateAction<RestaurantTable[]>>;
-    addTable:(table:RestaurantTable)=>void;
-    updateTable:(table:RestaurantTable)=>void;
-    deleteTable:(tableId:string)=>void;
-    updateTableStatus:(
-        tableId:string,
-        status:TableStatus
-    )=>void;
+interface TableContextType {
+  tables: RestaurantTable[];
+  setTables: React.Dispatch<
+    React.SetStateAction<RestaurantTable[]>
+  >;
+  addTable: (table: RestaurantTable) => void;
+  updateTable: (table: RestaurantTable) => void;
+  deleteTable: (tableId: string) => void;
+  updateTableStatus: (
+    tableId: string,
+    status: TableStatus
+  ) => void;
 }
 
-const TableContext = createContext<TableContextType | undefined>(
-    undefined
-);
+const TableContext = createContext<
+  TableContextType | undefined
+>(undefined);
+
+const loadTables = (): RestaurantTable[] => {
+  try {
+    const storedTables = localStorage.getItem(TABLE_STORAGE_KEY);
+
+    if (storedTables !== null) {
+      const parsedTables: unknown = JSON.parse(storedTables);
+
+      if (Array.isArray(parsedTables)) {
+        return parsedTables.map((table) => ({
+          ...table,
+          id: normalizeRecordId(table.id, "TABLE"),
+        })) as RestaurantTable[];
+      }
+    }
+  } catch (error) {
+    console.error("Failed to load restaurant tables:", error);
+  }
+
+  return initialTables;
+};
 
 export const TableProvider = ({
-    children,
+  children,
 }: {
-    children:React.ReactNode;
+  children: React.ReactNode;
 }) => {
-    const [tables,setTables] = useState<RestaurantTable[]>(() => {
-        const storedTables = localStorage.getItem(TABLE_STORAGE_KEY);
+  const [tables, setTables] = useState<RestaurantTable[]>(
+    loadTables
+  );
 
-        if(storedTables) {
-            const parsedTables = JSON.parse(storedTables) as RestaurantTable[];
-            return parsedTables.map((table) => ({
-                ...table,
-                id: normalizeRecordId(table.id, "TABLE"),
-            }));
-        }
-        return initialTables;
-    });
-
-    useEffect(() => {
-        localStorage.setItem(TABLE_STORAGE_KEY, JSON.stringify(tables))
-    },[tables]);
-
-    const addTable = (table:RestaurantTable) => {  
-        setTables((prev) => [
-            ...prev,
-            {...table, id: getNextRecordId("TABLE", prev.map((existingTable) => existingTable.id))},
-        ]);
+  // Persist table data whenever the table list changes.
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        TABLE_STORAGE_KEY,
+        JSON.stringify(tables)
+      );
+    } catch (error) {
+      console.error("Failed to save restaurant tables:", error);
     }
+  }, [tables]);
 
-    const updateTable = (updatedTable:RestaurantTable) => {
-        setTables((prev) => 
-        prev.map((table)=>
-        table.id === updatedTable.id ? updatedTable : table))
-    };
+  const addTable = (table: RestaurantTable) => {
+    setTables((previousTables) => {
+      const newId = getNextRecordId(
+        "TABLE",
+        previousTables.map((existingTable) => existingTable.id)
+      );
 
-    const deleteTable = (tableId:string) => {
-        setTables((prev) => 
-        prev.filter((table) => table.id !== tableId))
-    };
+      return [
+        ...previousTables,
+        {
+          ...table,
+          id: newId,
+        },
+      ];
+    });
+  };
 
-    const updateTableStatus = (
-        tableId:string,
-        status:TableStatus
-    ) => {
-        setTables((prev) => 
-        prev.map((table) => 
-        table.id === tableId
-    ? {...table,status} : table))
-    };
-
-    return(
-        <TableContext.Provider value={{
-            tables,
-            setTables,
-            addTable,
-            updateTable,
-            deleteTable,
-            updateTableStatus,
-        }}>
-            {children}
-        </TableContext.Provider>
+  const updateTable = (updatedTable: RestaurantTable) => {
+    setTables((previousTables) =>
+      previousTables.map((table) =>
+        table.id === updatedTable.id
+          ? { ...table, ...updatedTable }
+          : table
+      )
     );
+  };
+
+  const deleteTable = (tableId: string) => {
+    setTables((previousTables) =>
+      previousTables.filter((table) => table.id !== tableId)
+    );
+  };
+
+  const updateTableStatus = (
+    tableId: string,
+    status: TableStatus
+  ) => {
+    setTables((previousTables) =>
+      previousTables.map((table) =>
+        table.id === tableId
+          ? { ...table, status }
+          : table
+      )
+    );
+  };
+
+  return (
+    <TableContext.Provider
+      value={{
+        tables,
+        setTables,
+        addTable,
+        updateTable,
+        deleteTable,
+        updateTableStatus,
+      }}
+    >
+      {children}
+    </TableContext.Provider>
+  );
 };
 
 export const useTable = () => {
-    const context = useContext(TableContext);
+  const context = useContext(TableContext);
 
-    if(!context){
-        throw new Error(
-            "useTable must be used inside TableProvider"
-        );
-    }
-    return context;
-}
+  if (!context) {
+    throw new Error(
+      "useTable must be used inside TableProvider"
+    );
+  }
+
+  return context;
+};

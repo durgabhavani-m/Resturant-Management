@@ -8,7 +8,6 @@ export const rolePermissions: Record<StaffRole, Permission[]> = {
     "orders",
     "reservations",
     "billing",
-    "customers",
     "menu",
     "reports",
     "staff",
@@ -25,7 +24,6 @@ export const rolePermissions: Record<StaffRole, Permission[]> = {
     "dashboard",
     "reservations",
     "billing",
-    "customers",
     "orders",
   ],
 };

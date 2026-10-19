@@ -72,6 +72,8 @@ const initialStaff: Staff[] = [
     status: "Active",
     createdAt: new Date().toISOString(),
     password: ADMIN_PASSWORD,
+    passwordSet: true,
+    mustResetPassword: false,
   },
   {
     id: "STAFF-2",
@@ -82,6 +84,8 @@ const initialStaff: Staff[] = [
     status: "Active",
     createdAt: new Date().toISOString(),
     password: DEFAULT_STAFF_PASSWORD,
+    passwordSet: true,
+    mustResetPassword: true,
   },
   {
     id: "STAFF-3",
@@ -92,6 +96,8 @@ const initialStaff: Staff[] = [
     status: "Active",
     createdAt: new Date().toISOString(),
     password: DEFAULT_STAFF_PASSWORD,
+    passwordSet: true,
+    mustResetPassword: true,
   },
   {
     id: "STAFF-4",
@@ -102,6 +108,8 @@ const initialStaff: Staff[] = [
     status: "Active",
     createdAt: new Date().toISOString(),
     password: DEFAULT_STAFF_PASSWORD,
+    passwordSet: true,
+    mustResetPassword: true,
   },
   {
     id: "STAFF-5",
@@ -112,6 +120,8 @@ const initialStaff: Staff[] = [
     status: "Active",
     createdAt: new Date().toISOString(),
     password: DEFAULT_STAFF_PASSWORD,
+    passwordSet: true,
+    mustResetPassword: true,
   },
 ]
 

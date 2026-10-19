@@ -1,74 +1,108 @@
-import {useOrder} from "../../context/OrderContext";
+import { Link as RouterLink } from "react-router-dom";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import Divider from "@mui/material/Divider";
+
+import { useOrder } from "../../context/OrderContext";
+
+const statusColor = (status: string): "success" | "info" | "warning" | "default" => {
+  if (status === "Completed") return "success";
+  if (status === "Preparing") return "info";
+  return "warning";
+};
+
+const getOrderDateLabel = (value: string) => {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const getKey = (d: Date) =>
+    `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
+  if (getKey(date) === getKey(today)) return "Today";
+  if (getKey(date) === getKey(yesterday)) return "Yesterday";
+
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+  });
+};
 
 const RecentOrders = () => {
-  const {orders} = useOrder();
-  const recentOrders = orders.slice(-4).reverse();
+  const { orders } = useOrder();
+
+  const recentOrders = [...orders]
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() -
+        new Date(a.createdAt).getTime()
+    )
+    .slice(0, 4);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6">
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-semibold text-slate-900">
-            Recent Orders
-          </h3>
-
-          <p className="text-sm text-slate-500">
-            Latest restaurant orders
-          </p>
-        </div>
-
-        <button className="text-sm font-medium text-orange-600 hover:text-orange-700">
-          View all
-        </button>
-      </div>
-
-      <div className="mt-5 space-y-4">
+    <Card variant="outlined" sx={{ height: "100%" }}>
+      <CardContent>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
+          <Box>
+            <Typography
+            sx={{
+              fontSize: { xs: "1.25rem", md: "1.5rem" },
+              fontWeight: 600,
+              lineHeight: 1.3,
+              }}
+              >
+                Recent Orders
+              </Typography>
+              
+            <Typography variant="body2" color="text.secondary">
+              Latest restaurant orders
+            </Typography>
+          </Box>
+          <Button component={RouterLink} to="/orders" size="small" color="primary">
+            View all
+          </Button>
+        </Box>
 
         {recentOrders.length === 0 ? (
-          <p className="text-sm text-slate-500">No orders yet.</p>
-        ) : recentOrders.map((order) => (
-          <div
-            key={order.id}
-            className="flex items-center justify-between border-b border-slate-100 pb-4 last:border-0 last:pb-0"
-          >
-
-            <div>
-              <p className="text-sm font-semibold text-slate-800">
-                {order.orderNumber}
-              </p>
-
-              <p className="mt-1 text-xs text-slate-400">
-                {order.customerName}
-              </p>
-            </div>
-
-            <div className="text-right">
-
-              <p className="text-sm font-semibold text-slate-800">
-                ₹{order.total.toLocaleString("en-IN")}
-              </p>
-
-              <span
-                className={`mt-1 inline-block rounded-full px-2 py-1 text-xs font-medium ${
-                  order.status === "Completed"
-                    ? "bg-green-50 text-green-600"
-                    : order.status === "Preparing"
-                    ? "bg-blue-50 text-blue-600"
-                    : "bg-yellow-50 text-yellow-600"
-                }`}
-              >
-                {order.status}
-              </span>
-
-            </div>
-
-          </div>
-        ))}
-
-      </div>
-
-    </div>
+          <Typography variant="body2" color="text.secondary">
+            No orders yet.
+          </Typography>
+        ) : (
+          recentOrders.map((order, index) => (
+            <Box key={order.id}>
+              {index > 0 && <Divider sx={{ my: 1.5 }} />}
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Box>
+                  <Typography variant="body2" fontWeight={600}>
+                    {order.orderNumber}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {order.customerName}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    {getOrderDateLabel(order.createdAt)}
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: "right" }}>
+                  <Typography variant="body2" fontWeight={600}>
+                    ₹{order.total.toLocaleString("en-IN")}
+                  </Typography>
+                  <Chip label={order.status} size="small" color={statusColor(order.status)} sx={{ mt: 0.5 }} />
+                </Box>
+              </Box>
+            </Box>
+          ))
+        )}
+      </CardContent>
+    </Card>
   );
 };
 

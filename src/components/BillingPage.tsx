@@ -1,34 +1,106 @@
-import {
-  IndianRupee,
-  Search,
-  MoreHorizontal,
-  Eye,
-  CreditCard,
-  Trash2,
-  X,
-} from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import Table from "@mui/material/Table";
+import TableHead from "@mui/material/TableHead";
+import TableBody from "@mui/material/TableBody";
+import TableRow from "@mui/material/TableRow";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import Paper from "@mui/material/Paper";
+import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import Grid from "@mui/material/Grid2";
+import InputAdornment from "@mui/material/InputAdornment";
+import SearchIcon from "@mui/icons-material/Search";
+import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import CreditCardIcon from "@mui/icons-material/CreditCard";
+import DeleteIcon from "@mui/icons-material/Delete";
+import CloseIcon from "@mui/icons-material/Close";
 
 import { useBilling } from "../context/BillingContext";
 import { useOrder } from "../context/OrderContext";
 import { useRestaurant } from "../context/ResturantContext";
+import { useAppPreferences } from "../context/AppPreferencesContext";
+import { formatCurrency } from "../utils/formatCurrency";
 import type { Bill, PaymentMethod, PaymentStatus } from "../types/billing";
+
+const BILLING_FILTERS_STORAGE_KEY = "restaurant_billing_filters";
+
+const getStatusColor = (status: PaymentStatus): "success" | "warning" | "default" => {
+  if (status === "Paid") return "success";
+  if (status === "Pending") return "warning";
+  return "default";
+};
 
 const BillingPage = () => {
   const { bills, deleteBill, updatePaymentStatus } = useBilling();
   const { orders, updateOrder } = useOrder();
   const { settings } = useRestaurant();
+  const { preferences } = useAppPreferences();
 
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<PaymentStatus | "All">("All");
+  
+const [initialFilters] = useState(() => {
+  try {
+    const saved = localStorage.getItem(BILLING_FILTERS_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : {};
+  } catch {
+    return {};
+  }
+});
+
+const [search, setSearch] = useState<string>(
+  () => initialFilters.search ?? ""
+);
+
+const [status, setStatus] = useState<PaymentStatus | "All">(
+  () => initialFilters.status ?? "All"
+);
+
+const [dateRange, setDateRange] = useState<string>(
+  () => initialFilters.dateRange ?? preferences.defaultHistoryDateRange
+);
+
+const [customStart, setCustomStart] = useState<string>(
+  () => initialFilters.customStart ?? ""
+);
+
+const [customEnd, setCustomEnd] = useState<string>(
+  () => initialFilters.customEnd ?? ""
+);
+
+
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [viewingBill, setViewingBill] = useState<Bill | null>(null);
   const [payingBill, setPayingBill] = useState<Bill | null>(null);
   const [deletingBill, setDeletingBill] = useState<Bill | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
 
+  useEffect(() => {
+  localStorage.setItem(
+    BILLING_FILTERS_STORAGE_KEY,
+    JSON.stringify({
+      search,
+      status,
+      dateRange,
+      customStart,
+      customEnd,
+    })
+  );
+}, [search, status, dateRange, customStart, customEnd]);
+
   const filteredBills = useMemo(() => {
     const normalizedSearch = search.toLowerCase();
+     
     return bills.filter((bill) => {
       const matchesSearch =
         bill.billNumber.toLowerCase().includes(normalizedSearch) ||
@@ -38,9 +110,47 @@ const BillingPage = () => {
       const matchesStatus =
         status === "All" || bill.paymentStatus === status;
 
-      return matchesSearch && matchesStatus;
-    });
-  }, [bills, search, status]);
+        const billDate = new Date(bill.createdAt);
+        billDate.setHours(0,0,0,0);
+
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
+        const yesterday = new Date(today);
+        yesterday .setDate(today.getDate() - -1);
+
+        const last7Days = new Date(today);
+        last7Days.setDate(today.getDate() - 6);
+
+        const last30Days =  new Date(today);
+        last30Days.setDate(today.getDate() - 29);
+
+        let matchesDate = true;
+
+        if(dateRange === "Today"){
+          matchesDate = billDate.getTime() === today.getTime();
+        }else if (dateRange === "Yesterday"){
+          matchesDate = billDate.getTime() === yesterday.getTime();
+        }else if (dateRange === "Last 7 Days"){
+          matchesDate = billDate >= last7Days && billDate <= today;
+        }else if (dateRange === "Last 30 Days"){
+          matchesDate = billDate >= last30Days && billDate <= today;
+        }else if (dateRange === "Custom Range"){
+          if(customStart){
+            const startDate = new Date(`${customStart}T00:00:00`);
+            matchesDate = billDate >= startDate;
+          }
+
+          if(customEnd){
+            const endDate = new Date(`${customEnd}T00:00:00`);
+            endDate.setHours(23,59,59,999);
+            matchesDate = matchesDate && billDate <= endDate;
+          }
+        }
+
+       return matchesSearch && matchesStatus && matchesDate;
+      });
+    }, [bills, search, status, dateRange, customStart, customEnd]);
 
   const totalBills = bills.length;
 
@@ -52,15 +162,17 @@ const BillingPage = () => {
     (bill) => bill.paymentStatus === "Pending"
   );
 
-  const totalCollected = paidBills.reduce(
-    (total, bill) => total + bill.total,
-    0
-  );
+  const totalsByCurrency = (items: Bill[]) => {
+    const totals = new Map<string, number>();
+    items.forEach((bill) => {
+      const currency = bill.currencyCode ?? "INR";
+      totals.set(currency, (totals.get(currency) ?? 0) + bill.total);
+    });
+    return Array.from(totals, ([currency, amount]) => ({ currency, amount }));
+  };
 
-  const pendingAmount = pendingBills.reduce(
-    (total, bill) => total + bill.total,
-    0
-  );
+  const collectedByCurrency = totalsByCurrency(paidBills);
+  const pendingByCurrency = totalsByCurrency(pendingBills);
 
   const handlePayBill = () => {
     if (!payingBill || !paymentMethod || payingBill.paymentStatus !== "Pending") {
@@ -82,492 +194,619 @@ const BillingPage = () => {
     setDeletingBill(null);
   };
 
-  return (
-    <div className="flex h-full min-h-0 flex-col gap-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">
-          Billing
-        </h1>
+  const requestDeleteBill = (bill: Bill) => {
+    setOpenMenuId(null);
+    if (!preferences.confirmBeforeDelete) {
+      deleteBill(bill.id);
+      return;
+    }
+    setDeletingBill(bill);
+  };
 
-        <p className="mt-1 text-sm text-slate-500">
+  const viewingOrder = viewingBill
+    ? orders.find((item) => item.id === viewingBill.orderId)
+    : undefined;
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, minHeight: 0 }}>
+      {/* Header */}
+      <Box>
+        <Typography variant="h1">Billing</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
           Manage restaurant bills and payments
-        </p>
-      </div>
+        </Typography>
+      </Box>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <p className="text-sm text-slate-500">
-            Total Bills
-          </p>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, sm: 6, xl: 3 }}>
+          <Paper variant="outlined" sx={{ p: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              Total Bills
+            </Typography>
+            <Typography variant="h4" fontWeight={700} sx={{ mt: 1 }}>
+              {totalBills}
+            </Typography>
+          </Paper>
+        </Grid>
 
-          <p className="mt-2 text-2xl font-bold text-slate-900">
-            {totalBills}
-          </p>
-        </div>
+        <Grid size={{ xs: 12, sm: 6, xl: 3 }}>
+          <Paper variant="outlined" sx={{ p: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              Paid Bills
+            </Typography>
+            <Typography variant="h4" fontWeight={700} color="success.main" sx={{ mt: 1 }}>
+              {paidBills.length}
+            </Typography>
+          </Paper>
+        </Grid>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <p className="text-sm text-slate-500">
-            Paid Bills
-          </p>
+        <Grid size={{ xs: 12, sm: 6, xl: 3 }}>
+          <Paper variant="outlined" sx={{ p: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              Collected
+            </Typography>
+            <Box sx={{ mt: 1 }}>
+              {collectedByCurrency.length > 0
+                ? collectedByCurrency.map(({ currency, amount }) => (
+                    <Typography key={currency} variant="h6" fontWeight={700}>
+                      {formatCurrency(amount, currency)}
+                    </Typography>
+                  ))
+                : <Typography variant="h6" fontWeight={700}>{formatCurrency(0, settings.billing.currency)}</Typography>}
+            </Box>
+          </Paper>
+        </Grid>
 
-          <p className="mt-2 text-2xl font-bold text-emerald-600">
-            {paidBills.length}
-          </p>
-        </div>
+        <Grid size={{ xs: 12, sm: 6, xl: 3 }}>
+          <Paper variant="outlined" sx={{ p: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              Pending Amount
+            </Typography>
+            <Box sx={{ mt: 1 }}>
+              {pendingByCurrency.length > 0
+                ? pendingByCurrency.map(({ currency, amount }) => (
+                    <Typography key={currency} variant="h6" fontWeight={700} color="primary.main">
+                      {formatCurrency(amount, currency)}
+                    </Typography>
+                  ))
+                : <Typography variant="h6" fontWeight={700} color="primary.main">{formatCurrency(0, settings.billing.currency)}</Typography>}
+            </Box>
+          </Paper>
+        </Grid>
+      </Grid>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <p className="text-sm text-slate-500">
-            Collected
-          </p>
+      {/* Billing Date Filter */}
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 2,
+        }}
+      >
+        <Box>
+          <Typography variant="subtitle1" fontWeight={600}>
+            Billing History
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Filter bills by date
+          </Typography>
+        </Box>
 
-          <p className="mt-2 flex items-center text-2xl font-bold text-slate-900">
-            <IndianRupee size={20} />
-            {totalCollected.toLocaleString("en-IN")}
-          </p>
-        </div>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            flexWrap: "wrap",
+          }}
+        >
+          <TextField
+            select
+            size="small"
+            label="Date Range"
+            value={dateRange}
+            onChange={(event) => setDateRange(event.target.value)}
+            sx={{ minWidth: 180 }}
+          >
+            <MenuItem value="Today">Today</MenuItem>
+            <MenuItem value="Yesterday">Yesterday</MenuItem>
+            <MenuItem value="Last 7 Days">Last 7 Days</MenuItem>
+            <MenuItem value="Last 30 Days">Last 30 Days</MenuItem>
+            <MenuItem value="Custom Range">Custom Range</MenuItem>
+          </TextField>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <p className="text-sm text-slate-500">
-            Pending Amount
-          </p>
+          {dateRange === "Custom Range" && (
+            <>
+              <TextField
+                size="small"
+                label="From"
+                type="date"
+                value={customStart}
+                onChange={(event) => setCustomStart(event.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
 
-          <p className="mt-2 flex items-center text-2xl font-bold text-orange-600">
-            <IndianRupee size={20} />
-            {pendingAmount.toLocaleString("en-IN")}
-          </p>
-        </div>
-      </div>
+              <TextField
+                size="small"
+                label="To"
+                type="date"
+                value={customEnd}
+                onChange={(event) => setCustomEnd(event.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </>
+          )}
+        </Box>
+      </Paper>
+
 
       {/* Billing Table */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <Paper
+        variant="outlined"
+        sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
+      >
         {/* Filters */}
-        <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 p-5 md:flex-row md:items-center md:justify-between">
-          <div className="relative w-full md:max-w-md">
-            <Search
-              size={18}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: { xs: "column", md: "row" },
+            alignItems: { md: "center" },
+            justifyContent: "space-between",
+            gap: 2,
+            p: 2.5,
+            borderBottom: 1,
+            borderColor: "divider",
+            flexShrink: 0,
+          }}
+        >
+          <TextField
+            size="small"
+            fullWidth
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search bill, order or customer..."
+            sx={{ maxWidth: { md: 400 } }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: search && (
+                <InputAdornment position="end">
+                  <IconButton 
+                  size="small"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  edge="end">
+                    <CloseIcon fontSize="small"/>
+                  </IconButton>
+                </InputAdornment>
+              )
+            }}
+          />
 
-            <input
-              type="text"
-              value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
-              placeholder="Search bill, order or customer..."
-              className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-4 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-            />
-          </div>
-
-          <select
+          <Select
+            size="small"
             value={status}
             onChange={(event) =>
               setStatus(event.target.value as PaymentStatus | "All")
             }
-            className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-orange-500"
+            sx={{ minWidth: 160 }}
           >
-            <option value="All">All Payments</option>
-            <option value="Pending">Pending</option>
-            <option value="Paid">Paid</option>
-            <option value="Refunded">Refunded</option>
-          </select>
-        </div>
+            <MenuItem value="All">All Payments</MenuItem>
+            <MenuItem value="Pending">Pending</MenuItem>
+            <MenuItem value="Paid">Paid</MenuItem>
+            <MenuItem value="Refunded">Refunded</MenuItem>
+          </Select>
+        </Box>
+        
 
         {/* Table */}
-        <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full text-left">
-            <thead className="sticky top-0 z-10 bg-white">
-              <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <TableContainer sx={{ flex: 1, minHeight: 0 }}>
+          <Table stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600, textTransform: "uppercase", fontSize: "0.75rem", color: "text.secondary" }}>
                   Bill
-                </th>
-
-                <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600, textTransform: "uppercase", fontSize: "0.75rem", color: "text.secondary" }}>
                   Order
-                </th>
-
-                <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600, textTransform: "uppercase", fontSize: "0.75rem", color: "text.secondary" }}>
                   Customer
-                </th>
-
-                <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600, textTransform: "uppercase", fontSize: "0.75rem", color: "text.secondary" }}>
                   Total
-                </th>
-
-                <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600, textTransform: "uppercase", fontSize: "0.75rem", color: "text.secondary" }}>
                   Payment Status
-                </th>
-
-                <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600, textTransform: "uppercase", fontSize: "0.75rem", color: "text.secondary" }}>
                   Method
-                </th>
-
-                <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600, textTransform: "uppercase", fontSize: "0.75rem", color: "text.secondary" }}>
                   Created
-                </th>
-
-                <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600, textTransform: "uppercase", fontSize: "0.75rem", color: "text.secondary" }}>
                   Actions
-                </th>
-              </tr>
-            </thead>
+                </TableCell>
+              </TableRow>
+            </TableHead>
 
-            <tbody>
+            <TableBody>
               {filteredBills.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-5 py-12 text-center text-sm text-slate-500"
-                  >
-                    No bills found.
-                  </td>
-                </tr>
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      No bills found.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
               ) : (
                 filteredBills.map((bill) => (
-                  <tr
-                    key={bill.id}
-                    className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
-                  >
-                    <td className="px-5 py-4">
-                      <p className="font-medium text-slate-900">
-                        {bill.billNumber}
-                      </p>
-                    </td>
-
-                    <td className="px-5 py-4 text-sm text-slate-600">
-                      {bill.orderNumber}
-                    </td>
-
-                    <td className="px-5 py-4 text-sm text-slate-600">
-                      {bill.customerName}
-                    </td>
-
-                    <td className="px-5 py-4 font-medium text-slate-900">
-                      ₹{bill.total.toLocaleString("en-IN")}
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          bill.paymentStatus === "Paid"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : bill.paymentStatus === "Pending"
-                            ? "bg-orange-50 text-orange-700"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {bill.paymentStatus}
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-4 text-sm text-slate-600">
-                      {bill.paymentMethod ?? "—"}
-                    </td>
-
-                    <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
-                      {new Date(bill.createdAt).toLocaleDateString()}
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <div className="relative inline-block">
-                        <button
-                          type="button"
+                  <TableRow key={bill.id} hover>
+                    <TableCell>
+                      <Typography fontWeight={500}>{bill.billNumber}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {bill.orderNumber}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {bill.customerName}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography fontWeight={500}>
+                        {formatCurrency(bill.total, bill.currencyCode ?? "INR")}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={bill.paymentStatus}
+                        size="small"
+                        color={getStatusColor(bill.paymentStatus)}
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {bill.paymentMethod ?? "—"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ whiteSpace: "nowrap" }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {new Date(bill.createdAt).toLocaleDateString()}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ position: "relative", display: "inline-block" }}>
+                        <IconButton
+                          size="small"
                           onClick={() =>
                             setOpenMenuId(openMenuId === bill.id ? null : bill.id)
                           }
-                          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                           aria-label={`Actions for ${bill.billNumber}`}
                         >
-                          <MoreHorizontal size={18} />
-                        </button>
+                          <MoreHorizIcon fontSize="small" />
+                        </IconButton>
                         {openMenuId === bill.id && (
-                          <div className="absolute right-0 z-30 mt-2 w-44 rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg">
-                            <button
-                              type="button"
+                          <Paper
+                            elevation={3}
+                            sx={{
+                              position: "absolute",
+                              right: 0,
+                              zIndex: 30,
+                              mt: 1,
+                              width: 176,
+                              py: 0.5,
+                            }}
+                          >
+                            <Button
+                              fullWidth
+                              startIcon={<VisibilityIcon fontSize="small" />}
                               onClick={() => {
                                 setViewingBill(bill);
                                 setOpenMenuId(null);
                               }}
-                              className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+                              sx={{
+                                justifyContent: "flex-start",
+                                px: 2,
+                                py: 1,
+                                color: "text.primary",
+                                fontWeight: 400,
+                              }}
                             >
-                              <Eye size={16} />
                               View Bill
-                            </button>
+                            </Button>
                             {bill.paymentStatus === "Pending" && (
-                              <button
-                                type="button"
+                              <Button
+                                fullWidth
+                                startIcon={<CreditCardIcon fontSize="small" />}
                                 onClick={() => {
                                   setPayingBill(bill);
                                   setPaymentMethod("");
                                   setOpenMenuId(null);
                                 }}
-                                className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+                                sx={{
+                                  justifyContent: "flex-start",
+                                  px: 2,
+                                  py: 1,
+                                  color: "text.primary",
+                                  fontWeight: 400,
+                                }}
                               >
-                                <CreditCard size={16} />
                                 Pay Bill
-                              </button>
+                              </Button>
                             )}
-                            <button
-                              type="button"
+                            <Button
+                              fullWidth
+                              startIcon={<DeleteIcon fontSize="small" />}
                               onClick={() => {
-                                setDeletingBill(bill);
-                                setOpenMenuId(null);
+                                requestDeleteBill(bill);
                               }}
-                              className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                              sx={{
+                                justifyContent: "flex-start",
+                                px: 2,
+                                py: 1,
+                                color: "error.main",
+                                fontWeight: 400,
+                              }}
                             >
-                              <Trash2 size={16} />
                               Delete Bill
-                            </button>
-                          </div>
+                            </Button>
+                          </Paper>
                         )}
-                      </div>
-                    </td>
-                  </tr>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
 
-      {viewingBill && (() => {
-        const order = orders.find((item) => item.id === viewingBill.orderId);
+      {/* View Bill Dialog */}
+      <Dialog
+        open={Boolean(viewingBill)}
+        onClose={() => setViewingBill(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        {viewingBill && (
+          <>
+            <DialogTitle sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", pr: 1 }}>
+              <Box>
+                <Typography variant="h2">{settings.name}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Payment receipt
+                </Typography>
+              </Box>
+              <IconButton
+                onClick={() => setViewingBill(null)}
+                aria-label="Close bill"
+                size="small"
+              >
+                <CloseIcon />
+              </IconButton>
+            </DialogTitle>
 
-        return (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-            onClick={() => setViewingBill(null)}
-          >
-            <div
-              className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="flex shrink-0 items-start justify-between border-b border-slate-200 px-6 py-5">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    {settings.name}
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">Payment receipt</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setViewingBill(null)}
-                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-                  aria-label="Close bill"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="space-y-3 border-b border-slate-200 px-6 py-5">
-                <div className="flex justify-between gap-4 text-sm">
-                  <span className="text-slate-500">Bill Number</span>
-                  <span className="font-medium text-slate-900">{viewingBill.billNumber}</span>
-                </div>
-                <div className="flex justify-between gap-4 text-sm">
-                  <span className="text-slate-500">Order Number</span>
-                  <span className="font-medium text-slate-900">{viewingBill.orderNumber}</span>
-                </div>
-                <div className="flex justify-between gap-4 text-sm">
-                  <span className="text-slate-500">Customer</span>
-                  <span className="font-medium text-slate-900">{viewingBill.customerName}</span>
-                </div>
-                <div className="flex justify-between gap-4 text-sm">
-                  <span className="text-slate-500">Created</span>
-                  <span className="font-medium text-slate-900">
+            <DialogContent dividers>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pb: 2, mb: 2, borderBottom: 1, borderColor: "divider" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                  <Typography variant="body2" color="text.secondary">Bill Number</Typography>
+                  <Typography variant="body2" fontWeight={500}>{viewingBill.billNumber}</Typography>
+                </Box>
+                <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                  <Typography variant="body2" color="text.secondary">Order Number</Typography>
+                  <Typography variant="body2" fontWeight={500}>{viewingBill.orderNumber}</Typography>
+                </Box>
+                <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                  <Typography variant="body2" color="text.secondary">Customer</Typography>
+                  <Typography variant="body2" fontWeight={500}>{viewingBill.customerName}</Typography>
+                </Box>
+                <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                  <Typography variant="body2" color="text.secondary">Created</Typography>
+                  <Typography variant="body2" fontWeight={500}>
                     {new Date(viewingBill.createdAt).toLocaleString()}
-                  </span>
-                </div>
-              </div>
+                  </Typography>
+                </Box>
+              </Box>
 
-              <div className="px-6 py-5">
-                <h3 className="mb-4 font-semibold text-slate-900">Items</h3>
-                {order ? (
-                  <div className="space-y-4">
-                    {order.items.map((item, index) => (
-                      <div
-                        key={`${item.menuItemId}-${index}`}
-                        className="flex items-center justify-between gap-4"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-slate-900">{item.name}</p>
-                          <p className="text-xs text-slate-500">
-                            {item.quantity} × ₹{item.price.toLocaleString("en-IN")}
-                          </p>
-                        </div>
-                        <p className="text-sm font-semibold text-slate-900">
-                          ₹{(item.quantity * item.price).toLocaleString("en-IN")}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500">
-                    The original order is no longer available.
-                  </p>
+              <Typography fontWeight={600} sx={{ mb: 2 }}>Items</Typography>
+              {viewingOrder ? (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  {viewingOrder.items.map((item, index) => (
+                    <Box
+                      key={`${item.menuItemId}-${index}`}
+                      sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}
+                    >
+                      <Box>
+                        <Typography variant="body2" fontWeight={500}>{item.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.quantity} × {formatCurrency(item.price, item.currencyCode ?? viewingBill.currencyCode ?? "INR")}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" fontWeight={600}>
+                        {formatCurrency(item.quantity * item.price, item.currencyCode ?? viewingBill.currencyCode ?? "INR")}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  The original order is no longer available.
+                </Typography>
+              )}
+
+              <Box sx={{ mt: 2.5, pt: 2, borderTop: 1, borderColor: "divider", display: "flex", flexDirection: "column", gap: 1 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                  <Typography variant="body2" color="text.secondary">Subtotal</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {formatCurrency(viewingBill.subtotal, viewingBill.currencyCode ?? "INR")}
+                  </Typography>
+                </Box>
+                {(viewingBill.showTaxBreakdown ?? true) && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                    <Typography variant="body2" color="text.secondary">{viewingBill.taxLabel ?? "Tax"}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {formatCurrency(viewingBill.tax, viewingBill.currencyCode ?? "INR")}
+                    </Typography>
+                  </Box>
                 )}
+                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                  <Typography variant="body2" color="text.secondary">Discount</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {formatCurrency(viewingBill.discount, viewingBill.currencyCode ?? "INR")}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: "flex", justifyContent: "space-between", pt: 1.5, borderTop: 1, borderColor: "divider" }}>
+                  <Typography fontWeight={600}>Total</Typography>
+                  <Typography fontWeight={600}>
+                    {formatCurrency(viewingBill.total, viewingBill.currencyCode ?? "INR")}
+                  </Typography>
+                </Box>
+              </Box>
 
-                <div className="mt-5 space-y-2 border-t border-slate-200 pt-4 text-sm">
-                  <div className="flex justify-between text-slate-600">
-                    <span>Subtotal</span>
-                    <span>₹{viewingBill.subtotal.toLocaleString("en-IN")}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Tax</span>
-                    <span>₹{viewingBill.tax.toLocaleString("en-IN")}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Discount</span>
-                    <span>₹{viewingBill.discount.toLocaleString("en-IN")}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-200 pt-3 font-semibold text-slate-900">
-                    <span>Total</span>
-                    <span>₹{viewingBill.total.toLocaleString("en-IN")}</span>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center justify-between text-sm">
-                  <span className="text-slate-500">Payment Status</span>
-                  <span className="font-medium text-slate-900">{viewingBill.paymentStatus}</span>
-                </div>
-                <div className="mt-2 flex items-center justify-between text-sm">
-                  <span className="text-slate-500">Payment Method</span>
-                  <span className="font-medium text-slate-900">{viewingBill.paymentMethod ?? "—"}</span>
-                </div>
-              </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+              <Box sx={{ mt: 2, display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="body2" color="text.secondary">Payment Status</Typography>
+                <Typography variant="body2" fontWeight={500}>{viewingBill.paymentStatus}</Typography>
+              </Box>
+              <Box sx={{ mt: 1, display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="body2" color="text.secondary">Payment Method</Typography>
+                <Typography variant="body2" fontWeight={500}>{viewingBill.paymentMethod ?? "—"}</Typography>
+              </Box>
+            </DialogContent>
+          </>
+        )}
+      </Dialog>
 
-      {payingBill && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-          onClick={() => setPayingBill(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-xl bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-              <h2 className="text-lg font-semibold text-slate-900">Pay Bill</h2>
-              <button
-                type="button"
+      {/* Pay Bill Dialog */}
+      <Dialog
+        open={Boolean(payingBill)}
+        onClose={() => setPayingBill(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        {payingBill && (
+          <>
+            <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pr: 1 }}>
+              Pay Bill
+              <IconButton
                 onClick={() => setPayingBill(null)}
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
                 aria-label="Close payment dialog"
+                size="small"
               >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="space-y-4 px-6 py-5">
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between gap-4">
-                  <span className="text-slate-500">Bill Number</span>
-                  <span className="font-medium text-slate-900">{payingBill.billNumber}</span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-slate-500">Order Number</span>
-                  <span className="font-medium text-slate-900">{payingBill.orderNumber}</span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-slate-500">Customer</span>
-                  <span className="font-medium text-slate-900">{payingBill.customerName}</span>
-                </div>
-                <div className="flex justify-between gap-4 border-t border-slate-200 pt-3">
-                  <span className="font-medium text-slate-700">Total Amount</span>
-                  <span className="font-bold text-slate-900">
-                    ₹{payingBill.total.toLocaleString("en-IN")}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <label htmlFor="payment-method" className="mb-2 block text-sm font-medium text-slate-700">
-                  Payment Method
-                </label>
-                <select
-                  id="payment-method"
-                  value={paymentMethod}
-                  onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod | "")}
-                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                >
-                  <option value="">Select payment method</option>
-                  <option value="Cash">Cash</option>
-                  <option value="UPI">UPI</option>
-                  <option value="Card">Card</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4">
-              <button
-                type="button"
-                onClick={() => setPayingBill(null)}
-                className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                <CloseIcon />
+              </IconButton>
+            </DialogTitle>
+
+            <DialogContent dividers>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2.5 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                  <Typography variant="body2" color="text.secondary">Bill Number</Typography>
+                  <Typography variant="body2" fontWeight={500}>{payingBill.billNumber}</Typography>
+                </Box>
+                <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                  <Typography variant="body2" color="text.secondary">Order Number</Typography>
+                  <Typography variant="body2" fontWeight={500}>{payingBill.orderNumber}</Typography>
+                </Box>
+                <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                  <Typography variant="body2" color="text.secondary">Customer</Typography>
+                  <Typography variant="body2" fontWeight={500}>{payingBill.customerName}</Typography>
+                </Box>
+                <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, pt: 1.5, borderTop: 1, borderColor: "divider" }}>
+                  <Typography variant="body2" fontWeight={500}>Total Amount</Typography>
+                  <Typography fontWeight={700}>
+                    {formatCurrency(payingBill.total, payingBill.currencyCode ?? "INR")}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Typography variant="body2" fontWeight={500} sx={{ mb: 1 }}>
+                Payment Method
+              </Typography>
+              <Select
+                fullWidth
+                size="small"
+                displayEmpty
+                value={paymentMethod}
+                onChange={(event) =>
+                  setPaymentMethod(event.target.value as PaymentMethod | "")
+                }
               >
+                <MenuItem value="">
+                  <em>Select payment method</em>
+                </MenuItem>
+                <MenuItem value="Cash">Cash</MenuItem>
+                <MenuItem value="UPI">UPI</MenuItem>
+                <MenuItem value="Card">Card</MenuItem>
+                <MenuItem value="Other">Other</MenuItem>
+              </Select>
+            </DialogContent>
+
+            <DialogActions sx={{ px: 3, py: 2 }}>
+              <Button variant="outlined" onClick={() => setPayingBill(null)}>
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="contained"
                 onClick={handlePayBill}
                 disabled={!paymentMethod}
-                className="rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Mark as Paid
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
 
-      {deletingBill && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-          onClick={() => setDeletingBill(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-xl bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between px-6 py-5">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">Delete Bill</h2>
-                <p className="mt-2 text-sm text-slate-500">
-                  Delete {deletingBill.billNumber}? The order will not be affected.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDeletingBill(null)}
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-                aria-label="Close delete confirmation"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4">
-              <button
-                type="button"
-                onClick={() => setDeletingBill(null)}
-                className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteBill}
-                className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700"
-              >
+      {/* Delete Bill Dialog */}
+      <Dialog
+        open={Boolean(deletingBill)}
+        onClose={() => setDeletingBill(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        {deletingBill && (
+          <>
+            <DialogTitle sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", pr: 1 }}>
+              <Box>
                 Delete Bill
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontWeight: 400 }}>
+                  Delete {deletingBill.billNumber}? The order will not be affected.
+                </Typography>
+              </Box>
+              <IconButton
+                onClick={() => setDeletingBill(null)}
+                aria-label="Close delete confirmation"
+                size="small"
+              >
+                <CloseIcon />
+              </IconButton>
+            </DialogTitle>
+
+            <DialogActions sx={{ px: 3, py: 2 }}>
+              <Button variant="outlined" onClick={() => setDeletingBill(null)}>
+                Cancel
+              </Button>
+              <Button variant="contained" color="error" onClick={handleDeleteBill}>
+                Delete Bill
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+    </Box>
   );
 };
 

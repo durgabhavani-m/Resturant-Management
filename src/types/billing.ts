@@ -23,4 +23,7 @@ export interface Bill {
   paymentStatus: PaymentStatus;
   createdAt: string;
   paidAt?: string;
+  currencyCode?: string;
+  taxLabel?: string;
+  showTaxBreakdown?: boolean;
 }

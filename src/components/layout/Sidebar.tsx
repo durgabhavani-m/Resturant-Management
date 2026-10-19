@@ -1,27 +1,28 @@
 import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Utensils,
-  ShoppingCart,
-  CalendarDays,
-  Armchair,
-  Users,
-  UserCog,
-  Settings,
-  LogOut,
-  Receipt,
-} from "lucide-react";
+import Box from "@mui/material/Box";
+import List from "@mui/material/List";
+import ListItemButton from "@mui/material/ListItemButton";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import ListItemText from "@mui/material/ListItemText";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import Tooltip from "@mui/material/Tooltip";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import EventIcon from "@mui/icons-material/Event";
+import ChairIcon from "@mui/icons-material/Chair";
+import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
+import SettingsIcon from "@mui/icons-material/Settings";
+import LogoutIcon from "@mui/icons-material/Logout";
+import ReceiptIcon from "@mui/icons-material/Receipt";
+import CategoryIcon from "@mui/icons-material/Category";
 
 import { useAuth } from "../../context/AuthContext";
 import type { Permission } from "../../types/permission";
-
-interface SidebarItemProps {
-  icon: ReactNode;
-  label: string;
-  path: string;
-  permission: Permission;
-}
+import TuneIcon from "@mui/icons-material/Tune";
+import { useAppPreferences } from "../../context/AppPreferencesContext";
 
 interface NavigationItem {
   icon: ReactNode;
@@ -32,214 +33,149 @@ interface NavigationItem {
 
 const Sidebar = () => {
   const { user, hasPermission, logout } = useAuth();
-
+  const { preferences } = useAppPreferences();
   const navigate = useNavigate();
+  const expanded = preferences.sidebar === "expanded";
 
   const handleLogout = () => {
     logout();
-    navigate("/login", {replace:true});
-  }
+    navigate("/login", { replace: true });
+  };
 
   const navigationItems: NavigationItem[] = [
-    {
-      icon: <LayoutDashboard size={19} />,
-      label: "Dashboard",
-      path: "/dashboard",
-      permission: "dashboard",
-    },
-    {
-      icon: <Utensils size={19} />,
-      label: "Menu",
-      path: "/menu",
-      permission: "menu",
-    },
-    {
-      icon: <ShoppingCart size={19} />,
-      label: "Orders",
-      path: "/orders",
-      permission: "orders",
-    },
-    {
-      icon: <CalendarDays size={19} />,
-      label: "Reservations",
-      path: "/reservations",
-      permission: "reservations",
-    },
-    {
-      icon: <Armchair size={19} />,
-      label: "Tables",
-      path: "/tables",
-      permission: "tables",
-    },
-    {
-      icon: <Users size={19} />,
-      label: "Customers",
-      path: "/customers",
-      permission: "customers",
-    },
-    {
-      icon: <Receipt size={19} />,
-      label: "Billing",
-      path: "/billing",
-      permission: "billing",
-    },
-    {
-      icon: <UserCog size={19} />,
-      label: "Staff",
-      path: "/staff",
-      permission: "staff",
-    },
-    {
-      icon: <Settings size={19} />,
-      label: "Settings",
-      path: "/settings",
-      permission: "settings",
-    },
+    { icon: <DashboardIcon fontSize="small" />, label: "Dashboard", path: "/dashboard", permission: "dashboard" },
+    { icon: <RestaurantMenuIcon fontSize="small" />, label: "Menu", path: "/menu", permission: "menu" },
+    { icon: <CategoryIcon fontSize="small" />, label: "Categories", path: "/categories", permission: "menu" },
+    { icon: <TuneIcon fontSize="small" />, label: "Modifier Group", path: "/modifiers", permission: "menu"},
+    { icon: <ShoppingCartIcon fontSize="small" />, label: "Orders", path: "/orders", permission: "orders" },
+    { icon: <EventIcon fontSize="small" />, label: "Reservations", path: "/reservations", permission: "reservations" },
+    { icon: <ChairIcon fontSize="small" />, label: "Tables", path: "/tables", permission: "tables" },
+    { icon: <ReceiptIcon fontSize="small" />, label: "Billing", path: "/billing", permission: "billing" },
+    { icon: <ManageAccountsIcon fontSize="small" />, label: "Staff", path: "/staff", permission: "staff" },
+    { icon: <SettingsIcon fontSize="small" />, label: "Settings", path: "/settings", permission: "settings" },
   ];
 
-  const visibleNavigationItems = navigationItems.filter((item) =>
-    hasPermission(item.permission)
-  );
+  const visibleItems = navigationItems.filter((item) => hasPermission(item.permission));
 
-  const mainItems = visibleNavigationItems.filter((item) =>
-    [
-      "dashboard",
-      "menu",
-      "orders",
-      "reservations",
-      "tables",
-    ].includes(item.permission)
+  const mainItems = visibleItems.filter((item) =>
+    ["dashboard", "menu", "orders", "reservations", "tables"].includes(item.permission)
   );
+  const managementItems = visibleItems.filter((item) =>
+    ["staff", "billing"].includes(item.permission)
+  );
+  const systemItems = visibleItems.filter((item) => item.permission === "settings");
+  const renderSection = (title: string, items: NavigationItem[]) => {
+    if (items.length === 0) return null;
 
-  const managementItems = visibleNavigationItems.filter((item) =>
-    ["customers", "staff", "billing"].includes(item.permission)
-  );
-
-  const systemItems = visibleNavigationItems.filter(
-    (item) => item.permission === "settings"
-  );
+    return (
+      <Box sx={{ mb: 2 }}>
+        {expanded && (
+          <Typography
+            variant="caption"
+            sx={{ px: 2, mb: 1, display: "block", color: "grey.500", fontWeight: 600, letterSpacing: 1 }}
+          >
+            {title}
+          </Typography>
+        )}
+        <List dense disablePadding>
+          {items.map((item) => (
+            <Tooltip key={item.path} title={expanded ? "" : item.label} placement="right">
+              <ListItemButton
+                component={NavLink}
+                to={item.path}
+                aria-label={expanded ? undefined : item.label}
+                sx={{
+                  mx: 1,
+                  mb: 0.5,
+                  borderRadius: 1,
+                  color: "grey.400",
+                  justifyContent: expanded ? "initial" : "center",
+                  px: expanded ? 2 : 1,
+                  "&.active": {
+                    bgcolor: "primary.main",
+                    color: "white",
+                    "& .MuiListItemIcon-root": { color: "white" },
+                  },
+                  "&:hover": { bgcolor: "grey.800", color: "white" },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: expanded ? 36 : 0, color: "inherit", justifyContent: "center" }}>
+                  {item.icon}
+                </ListItemIcon>
+                {expanded && <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: 14, fontWeight: 500 }} />}
+              </ListItemButton>
+            </Tooltip>
+          ))}
+        </List>
+      </Box>
+    );
+  };
 
   return (
-    <aside className="hidden h-dvh w-64 shrink-0 flex-col overflow-hidden bg-slate-900 text-white md:flex">
-      {/* Logo */}
-      <div className="flex h-20 shrink-0 items-center border-b border-slate-800 px-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-600">
-            <Utensils size={22} />
-          </div>
-
-          <div>
-            <h1 className="text-lg font-bold">RestruHub</h1>
-
-            <p className="text-xs text-slate-400">
-              Management System
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation */}
-      <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6">
-        {/* Main */}
-        <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-          Main
-        </p>
-
-        {mainItems.map((item) => (
-          <SidebarItem
-            key={item.path}
-            icon={item.icon}
-            label={item.label}
-            path={item.path}
-            permission={item.permission}
-          />
-        ))}
-
-        {/* Management */}
-        {managementItems.length > 0 && (
-          <>
-            <p className="mb-3 mt-8 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Management
-            </p>
-
-            {managementItems.map((item) => (
-              <SidebarItem
-                key={item.path}
-                icon={item.icon}
-                label={item.label}
-                path={item.path}
-                permission={item.permission}
-              />
-            ))}
-          </>
-        )}
-
-        {/* System */}
-        {systemItems.length > 0 && (
-          <>
-            <p className="mb-3 mt-8 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              System
-            </p>
-
-            {systemItems.map((item) => (
-              <SidebarItem
-                key={item.path}
-                icon={item.icon}
-                label={item.label}
-                path={item.path}
-                permission={item.permission}
-              />
-            ))}
-          </>
-        )}
-      </nav>
-
-      {/* Current User + Logout */}
-      <div className="shrink-0 border-t border-slate-800 p-4">
-        {user && (
-          <div className="mb-3 rounded-lg bg-slate-800 px-3 py-3">
-            <p className="truncate text-sm font-medium text-white">
-              {user.name}
-            </p>
-
-            <p className="truncate text-xs text-slate-400">
-              {user.role}
-            </p>
-          </div>
-        )}
-
-        <button
-          onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white"
-        >
-          <LogOut size={19} />
-          <span>Logout</span>
-        </button>
-      </div>
-    </aside>
-  );
-};
-
-const SidebarItem = ({
-  icon,
-  label,
-  path,
-}: SidebarItemProps) => {
-  return (
-    <NavLink
-      to={path}
-      className={({ isActive }) =>
-        `mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition ${
-          isActive
-            ? "bg-orange-600 text-white"
-            : "text-slate-400 hover:bg-slate-800 hover:text-white"
-        }`
-      }
+    <Box
+      component="aside"
+      sx={{
+        display: { xs: "none", md: "flex" },
+        flexDirection: "column",
+        width: expanded ? 256 : 76,
+        flexShrink: 0,
+        height: "100dvh",
+        bgcolor: "grey.900",
+        color: "white",
+        overflow: "hidden",
+        transition: "width 180ms ease",
+      }}
     >
-      <span className="shrink-0">{icon}</span>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: expanded ? "flex-start" : "center", gap: 1.5, height: 80, px: expanded ? 3 : 1, borderBottom: "1px solid", borderColor: "grey.800" }}>
+        <Box
+          sx={{
+            width: 40,
+            height: 40,
+            borderRadius: 2,
+            bgcolor: "primary.main",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <RestaurantMenuIcon />
+        </Box>
+        {expanded && <Box>
+          <Typography fontWeight={700}>RestruHub</Typography>
+          <Typography variant="caption" color="grey.500">
+            Management System
+          </Typography>
+        </Box>}
+      </Box>
 
-      <span className="truncate">{label}</span>
-    </NavLink>
+      <Box sx={{ flex: 1, overflowY: "auto", py: 3, px: expanded ? 1 : 0 }}>
+        {renderSection("MAIN", mainItems)}
+        {renderSection("MANAGEMENT", managementItems)}
+        {renderSection("SYSTEM", systemItems)}
+      </Box>
+
+      <Box sx={{ p: expanded ? 2 : 1, borderTop: "1px solid", borderColor: "grey.800" }}>
+        {user && expanded && (
+          <Box sx={{ mb: 1.5, px: 1.5, py: 1.5, borderRadius: 1, bgcolor: "grey.800" }}>
+            <Typography variant="body2" fontWeight={500} noWrap>
+              {user.name}
+            </Typography>
+            <Typography variant="caption" color="grey.500" noWrap>
+              {user.role}
+            </Typography>
+          </Box>
+        )}
+        <Button
+          fullWidth
+          startIcon={<LogoutIcon />}
+          aria-label="Logout"
+          onClick={handleLogout}
+          sx={{ justifyContent: expanded ? "flex-start" : "center", minWidth: 0, color: "grey.400", "& .MuiButton-startIcon": { mr: expanded ? 1 : 0 }, "&:hover": { bgcolor: "grey.800", color: "white" } }}
+        >
+          {expanded && "Logout"}
+        </Button>
+      </Box>
+    </Box>
   );
 };
 

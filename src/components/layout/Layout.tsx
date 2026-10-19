@@ -1,21 +1,31 @@
-import{Outlet} from "react-router-dom";
+import { Outlet } from "react-router-dom";
+import Box from "@mui/material/Box";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 
-
 const Layout = () => {
-    return (
-        <div className="flex h-dvh min-h-0 w-full overflow-hidden bg-slate-50">
-            <Sidebar/>
+  return (
+    <Box sx={{ display: "flex", height: "100dvh", overflow: "hidden", bgcolor: "background.default" }}>
+      <Sidebar />
 
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                <Navbar/>
+      <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden" }}>
+        <Navbar />
 
-                <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 md:p-6">
-                    <Outlet/>
-                </main>
-            </div>
-        </div>
-    );
+        <Box
+          component="main"
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            minWidth: 0,
+            overflowY: "auto",
+            p: { xs: 2, md: 3 },
+          }}
+        >
+          <Outlet />
+        </Box>
+      </Box>
+    </Box>
+  );
 };
+
 export default Layout;
