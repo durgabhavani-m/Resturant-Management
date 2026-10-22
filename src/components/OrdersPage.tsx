@@ -20,10 +20,13 @@ import InputAdornment from "@mui/material/InputAdornment";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+
 import { useOrder } from "../context/OrderContext";
 import type { Order, OrderStatus } from "../types/order";
 import { useTable } from "../context/TableContext";
-import { useAppPreferences } from "../context/AppPreferencesContext";
+
 
 import {usePersistentState} from "../hooks/usePersistentState";
 
@@ -35,17 +38,65 @@ const getStatusColor = (status: OrderStatus): "success" | "error" | "info" | "wa
 };
 
 const OrdersPage = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const { orders, updateOrder } = useOrder();
   const { tables, updateTableStatus } = useTable();
-  const { preferences } = useAppPreferences();
-  const [search, setSearch] = usePersistentState("orders_page_search", "");
-  const [status, setStatus] = usePersistentState<OrderStatus | "All">("orders_page_status","All");
-  const [section, setSection] = usePersistentState<string>("orders_page_section",preferences.defaultHistoryDateRange);
-  const [dateRange, setDateRange] = usePersistentState<string>("orders_page_date_range",preferences.defaultHistoryDateRange);
-  const [customStart, setCustomStart] = usePersistentState("orders_page_custom_start","");
-  const [customEnd, setCustomEnd] = usePersistentState("orders_page_custom_end","");
+  const [search, setSearch] = usePersistentState(
+  "orders_page_search",
+  ""
+   );
+
+  const [status, setStatus] = usePersistentState<OrderStatus | "All">(
+  "orders_page_status",
+  "All"
+  );
+
+  const [section, setSection] = usePersistentState<string>(
+  "orders_page_section",
+  "All"
+  );
+
+  const [dateRange, setDateRange] = usePersistentState<string>(
+  "orders_page_date_range",
+  "All Time"
+  );
+
+  const [customStart, setCustomStart] = usePersistentState(
+  "orders_page_custom_start",
+  ""
+  );
+
+  const [customEnd, setCustomEnd] = usePersistentState(
+  "orders_page_custom_end",
+  ""
+ );
   const [selectedOrder, setSelectedOrder] = usePersistentState<Order | null>("orders_page_Selected_order",null);
   const [editingOrder, setEditingOrder] = usePersistentState<Order | null>("orders_age_editing_order",null);
+
+  useEffect(() => {
+  const navigationState = location.state as
+    | { showAllOrders?: boolean }
+    | null;
+
+  if (navigationState?.showAllOrders) {
+    setSearch("");
+    setStatus("All");
+    setSection("All");
+    setDateRange("All Time");
+    setCustomStart("");
+    setCustomEnd("");
+
+    // Clear the navigation flag after resetting filters
+    navigate(location.pathname, {
+      replace: true,
+      state: null,
+    });
+  }
+}, [
+  location.key
+]);
 
   const filteredOrders = orders.filter((order) => {
 
@@ -101,9 +152,14 @@ const OrdersPage = () => {
         matchesDate = orderDate >= start && orderDate < end;
       }
 
-    return matchesSearch && matchesStatus &&
-     matchesSection && matchesDate;
-  });
+    return (matchesSearch && matchesStatus &&
+     matchesSection && matchesDate);
+  })
+  .sort(
+    (a, b) =>
+      new Date(b.createdAt).getTime() -
+      new Date(a.createdAt).getTime()
+  );
 
   const handleViewOrder = (order: Order) => {
     setSelectedOrder(order);
@@ -206,6 +262,7 @@ const OrdersPage = () => {
         onChange={(e) => setDateRange(e.target.value)}
         sx={{minWidth:180}}
         >
+          <MenuItem value="All Time">All Time</MenuItem>
           <MenuItem value="Today">Today</MenuItem>
           <MenuItem value="Yesterday">Yesterday</MenuItem>
           <MenuItem value="Last 7 Days">Last 7 Days</MenuItem>
@@ -226,7 +283,14 @@ const OrdersPage = () => {
             label="From"
             type="date"
             value={customStart}
-            onChange={(e) => setCustomStart(e.target.value)}
+            onChange={(e) => {
+              const newStart = e.target.value;
+              setCustomStart(newStart);
+
+              if(customEnd && newStart > customEnd){
+                setCustomEnd("")
+              }
+            }}
             slotProps={{inputLabel:{shrink:true}}}
             />
 
@@ -236,7 +300,12 @@ const OrdersPage = () => {
             type="date"
             value={customEnd}
             onChange={(e) => setCustomEnd(e.target.value)}
-            slotProps={{inputLabel:{shrink:true}}}
+            slotProps={{
+              inputLabel:{shrink:true},
+              htmlInput:{
+                min:customStart || undefined,
+              },
+            }}
             />
           </Box>
         )}
@@ -349,7 +418,15 @@ const OrdersPage = () => {
               sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}
             >
               <Box>
-                <Typography variant="h3">Order {selectedOrder.orderNumber}</Typography>
+                <Typography 
+                 sx={{
+                  fontSize: "1.5rem",
+                  fontWeight: 600,
+                  lineHeight: 1.3,
+                  pr: 5,
+                }}
+                >Order {selectedOrder.orderNumber}
+                </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                   {new Date(selectedOrder.createdAt).toLocaleString()}
                 </Typography>

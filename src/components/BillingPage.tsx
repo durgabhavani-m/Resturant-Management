@@ -117,7 +117,7 @@ const [customEnd, setCustomEnd] = useState<string>(
         today.setHours(0,0,0,0);
 
         const yesterday = new Date(today);
-        yesterday .setDate(today.getDate() - -1);
+        yesterday .setDate(today.getDate() - 1);
 
         const last7Days = new Date(today);
         last7Days.setDate(today.getDate() - 6);
@@ -327,7 +327,14 @@ const [customEnd, setCustomEnd] = useState<string>(
                 label="From"
                 type="date"
                 value={customStart}
-                onChange={(event) => setCustomStart(event.target.value)}
+                onChange={(event) => {
+                  const newStart = event.target.value;
+                  setCustomStart(newStart);
+
+                  if(customEnd && newStart && customEnd < newStart){
+                    setCustomEnd("");
+                  }
+                }}
                 slotProps={{ inputLabel: { shrink: true } }}
               />
 
@@ -337,7 +344,12 @@ const [customEnd, setCustomEnd] = useState<string>(
                 type="date"
                 value={customEnd}
                 onChange={(event) => setCustomEnd(event.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
+                slotProps={{
+                   inputLabel: { shrink: true },
+                   htmlInput:{
+                    min: customStart || undefined,
+                   }
+                   }}
               />
             </>
           )}

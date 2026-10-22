@@ -1,21 +1,33 @@
 import { useMemo, useState } from "react";
 import { usePersistentState } from "../../hooks/usePersistentState";
+
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import AddIcon from "@mui/icons-material/Add";
+import SecurityIcon from "@mui/icons-material/Security";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
+import DialogContentText from "@mui/material/DialogContentText";
 import TextField from "@mui/material/TextField";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
 import FormGroup from "@mui/material/FormGroup";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import Avatar from "@mui/material/Avatar";
+import Divider from "@mui/material/Divider";
+import Alert from "@mui/material/Alert";
+import Chip from "@mui/material/Chip";
 
-import type { Permission } from "../../types/permission";
+import {
+  PAGE_PERMISSIONS,
+  type Permission,
+} from "../../types/permission";
+
 import { useRoles } from "../../context/RoleContext";
-
 import { useStaff } from "../../context/StaffContext";
 import { useAppPreferences } from "../../context/AppPreferencesContext";
 import { generateTemporaryPassword } from "../../utils/password";
@@ -32,20 +44,13 @@ import StaffFilters from "./StaffFilters";
 import StaffTable from "./StaffTable";
 import StaffDialogs from "./StaffDialogs";
 
-const availablePermissions: Permission[] = [
-  "dashboard",
-  "tables",
-  "orders",
-  "reservations",
-  "billing",
-  "menu",
-  "reports",
-  "staff",
-  "settings",
+const DEFAULT_DISPLAYED_PERMISSIONS: Permission[] = [
+  ...PAGE_PERMISSIONS,
 ];
 
 const StaffPage = () => {
   const { preferences } = useAppPreferences();
+
   const {
     staff,
     addStaff,
@@ -53,118 +58,158 @@ const StaffPage = () => {
     deleteStaff,
   } = useStaff();
 
+  const { roles, addRole, updateRole } = useRoles();
 
+  // Staff filters
   const [search, setSearch] = usePersistentState(
-  "staff_page_search",
-  ""
-);
-  const [role, setRole] = usePersistentState<StaffRole | "All">(
-  "staff_page_role_filter",
-  "All"
-);
- const [status, setStatus] = usePersistentState<StaffStatus | "All">(
-  "staff_page_status_filter",
-  "All"
-);
-  const { roles, addRole } = useRoles();
-  const [showRoleForm, setShowRoleForm] = usePersistentState<boolean>(
-  "staff_page_role_form_open",
-  false
-);
-  const [roleName, setRoleName] = usePersistentState<string>(
-  "staff_page_role_name",
-  ""
-);
- const [rolePermissions, setRolePermissions] =
-  usePersistentState<Permission[]>(
-    "staff_page_role_permissions",
-    []
+    "staff_page_search",
+    ""
   );
+
+  const [role, setRole] = usePersistentState<StaffRole | "All">(
+    "staff_page_role_filter",
+    "All"
+  );
+
+  const [status, setStatus] = usePersistentState<StaffStatus | "All">(
+    "staff_page_status_filter",
+    "All"
+  );
+
+  // Add Role dialog state
+  const [showRoleForm, setShowRoleForm] = usePersistentState<boolean>(
+    "staff_page_role_form_open",
+    false
+  );
+
+  const [roleName, setRoleName] = usePersistentState<string>(
+    "staff_page_role_name",
+    ""
+  );
+
+  const [rolePermissions, setRolePermissions] =
+    usePersistentState<Permission[]>(
+      "staff_page_role_permissions",
+      []
+    );
+
   const [roleError, setRoleError] = useState("");
 
-  //action menu state
+  // Persist the displayed permissions list
+  const [displayedPermissions, setDisplayedPermissions] =
+    usePersistentState<Permission[]>(
+      "staff_page_displayed_permissions",
+      DEFAULT_DISPLAYED_PERMISSIONS
+    );
 
-  const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
+  const [showPermissionPicker, setShowPermissionPicker] =
+    useState(false);
+
+  // Keep previously saved permissions and include newly registered ones.
+  const visiblePermissions = Array.from(
+    new Set<Permission>([
+      ...displayedPermissions.filter((permission) =>
+        PAGE_PERMISSIONS.includes(permission)
+      ),
+      ...PAGE_PERMISSIONS,
+    ])
+  );
+
+  const permissionsNotDisplayed = PAGE_PERMISSIONS.filter(
+    (permission) => !visiblePermissions.includes(permission)
+  );
+
+  // Manage Role Permissions dialog state
+  const [permissionsStaff, setPermissionsStaff] =
+    useState<Staff | null>(null);
+
+  const [selectedRolePermissions, setSelectedRolePermissions] =
+    useState<Permission[]>([]);
+
+  const [permissionSaveError, setPermissionSaveError] =
+    useState("");
+
+  // Staff action menu state
+  const [menuAnchorEl, setMenuAnchorEl] =
+    useState<HTMLElement | null>(null);
+
   const [menuMember, setMenuMember] = useState<Staff | null>(null);
 
-  //dialog state
-
+  // Selected staff
   const [selectedStaffId, setSelectedStaffId] =
-  usePersistentState<string | number | null>(
-    "staff_page_selected_staff_id",
-    null
+    usePersistentState<string | number | null>(
+      "staff_page_selected_staff_id",
+      null
+    );
+
+  const selectedStaff: Staff | null =
+    staff.find(
+      (member) => String(member.id) === String(selectedStaffId)
+    ) ?? null;
+
+  // Staff form state
+  const [showForm, setShowForm] = usePersistentState(
+    "staff_page_form_open",
+    false
   );
 
- const selectedStaff: Staff | null =
-  staff.find(
-    (member) => String(member.id) === String(selectedStaffId)
-  ) ?? null;
-
-  const [showForm, setShowForm] = usePersistentState("staff_page_form_open",false);
-
- const [editingStaffId, setEditingStaffId] =
-  usePersistentState<string | number | null>(
-    "staff_page_editing_staff_id",
-    null
-  );
+  const [editingStaffId, setEditingStaffId] =
+    usePersistentState<string | number | null>(
+      "staff_page_editing_staff_id",
+      null
+    );
 
   const editingStaff: Staff | null =
-  staff.find(
-    (member) => String(member.id) === String(editingStaffId)
-  ) ?? null;
-
-  //form fields
+    staff.find(
+      (member) => String(member.id) === String(editingStaffId)
+    ) ?? null;
 
   const [name, setName] = usePersistentState("staff_form_name", "");
   const [email, setEmail] = usePersistentState("staff_form_email", "");
   const [phone, setPhone] = usePersistentState("staff_form_phone", "");
- const [password, setPassword] = usePersistentState("staff_form_password", "");
-  const [formRole, setFormRole] =
-  usePersistentState<StaffRole>(
+  const [password, setPassword] = usePersistentState(
+    "staff_form_password",
+    ""
+  );
+
+  const [formRole, setFormRole] = usePersistentState<StaffRole>(
     "staff_form_role",
     "Dine-in Staff"
   );
-  const [formStatus, setFormStatus] =
-  usePersistentState<StaffStatus>(
+
+  const [formStatus, setFormStatus] = usePersistentState<StaffStatus>(
     "staff_form_status",
     "Active"
   );
 
-  const [formErrors, setFormErrors] =
-    useState<{
-      name?: string;
-      email?: string;
-      phone?: string;
-      password?: string;
-    }>({});
+  const [formErrors, setFormErrors] = useState<{
+    name?: string;
+    email?: string;
+    phone?: string;
+    password?: string;
+  }>({});
 
- //FILTER STAFF
-
+  // Filter staff
   const filteredStaff = useMemo(() => {
     return staff.filter((member) => {
       const searchText = search.toLowerCase();
 
-      const matchesSearch = 
+      const matchesSearch =
         member.name.toLowerCase().includes(searchText) ||
         member.email.toLowerCase().includes(searchText) ||
         member.phone.includes(searchText);
 
       const matchesRole =
-        role === "All" ||
-        member.role === role;
+        role === "All" || member.role === role;
 
       const matchesStatus =
-        status === "All" ||
-        member.status === status;
+        status === "All" || member.status === status;
 
-      return (
-        matchesSearch && matchesRole && matchesStatus
-      );
+      return matchesSearch && matchesRole && matchesStatus;
     });
   }, [staff, search, role, status]);
- 
-  // ACTION MENU
 
+  // Action menu
   const handleMenuOpen = (
     event: React.MouseEvent<HTMLElement>,
     member: Staff
@@ -178,28 +223,27 @@ const StaffPage = () => {
     setMenuMember(null);
   };
 
-  //VIEW STAFF
-
+  // View staff
   const handleViewStaff = (member: Staff) => {
     setSelectedStaffId(member.id);
     handleMenuClose();
   };
 
-  //DELETE STAFF
-
+  // Delete staff
   const handleDeleteStaff = (member: Staff) => {
+    handleMenuClose();
+
     if (
       preferences.confirmBeforeDelete &&
       !window.confirm(`Are you sure you want to delete ${member.name}?`)
     ) {
       return;
     }
+
     deleteStaff(member.id);
-    handleMenuClose();
   };
 
-  //RESET FORM
-
+  // Reset staff form
   const resetForm = () => {
     setName("");
     setEmail("");
@@ -211,44 +255,64 @@ const StaffPage = () => {
     setEditingStaffId(null);
   };
 
-  //ADD STAFF
-
+  // Add staff
   const handleAddStaff = () => {
     resetForm();
     setShowForm(true);
   };
 
+  // Open Add Role dialog
   const handleOpenRoleForm = () => {
     setRoleName("");
     setRolePermissions([]);
     setRoleError("");
+    setShowPermissionPicker(false);
     setShowRoleForm(true);
   };
 
+  // Close Add Role dialog
   const handleCloseRoleForm = () => {
     setShowRoleForm(false);
     setRoleName("");
     setRolePermissions([]);
     setRoleError("");
-  }
-
-  const handlePermissionChange = (
-    permission: Permission
-  ) => {
-    setRolePermissions((current) => 
-      current.includes(permission)
-      ? current.filter((item) => item !== permission)
-      : [...current,permission] 
-    );
+    setShowPermissionPicker(false);
   };
 
-  const handleSaveRole = () =>{
-    if(!roleName.trim()) {
+  // Add or remove a selected permission for a new role
+  const handlePermissionChange = (permission: Permission) => {
+    setRolePermissions((current) =>
+      current.includes(permission)
+        ? current.filter((item) => item !== permission)
+        : [...current, permission]
+    );
+
+    setRoleError("");
+  };
+
+  // Add a registered permission to the visible list
+  const handleAddPermission = (permission: Permission) => {
+    setDisplayedPermissions((current) =>
+      current.includes(permission)
+        ? current
+        : [...current, permission]
+    );
+
+    setShowPermissionPicker(false);
+  };
+
+  const handleClosePermissionPicker = () => {
+    setShowPermissionPicker(false);
+  };
+
+  // Save new role
+  const handleSaveRole = () => {
+    if (!roleName.trim()) {
       setRoleError("Role name is required.");
       return;
     }
 
-    if(rolePermissions.length === 0){
+    if (rolePermissions.length === 0) {
       setRoleError("Select at least one permission.");
       return;
     }
@@ -257,22 +321,21 @@ const StaffPage = () => {
       roleName.trim(),
       rolePermissions
     );
-    if(!added){
+
+    if (!added) {
       setRoleError("A role with this name already exists.");
       return;
     }
+
     handleCloseRoleForm();
-  }
+  };
 
-  //EDIT STAFF
-
+  // Edit staff
   const handleEditStaff = (member: Staff) => {
     setEditingStaffId(member.id);
     setName(member.name);
     setEmail(member.email);
     setPhone(member.phone);
-
-    // Don't show the existing password.
     setPassword("");
     setFormRole(member.role);
     setFormStatus(member.status);
@@ -281,8 +344,84 @@ const StaffPage = () => {
     setShowForm(true);
   };
 
-  //SAVE STAFF
+  // Open Manage Role Permissions
+  const handleManagePermissions = (member: Staff) => {
+    handleMenuClose();
 
+    const assignedRole = roles.find(
+      (item) => item.name === member.role
+    );
+
+    if (!assignedRole) {
+      setPermissionSaveError(
+        `The role "${member.role}" could not be found.`
+      );
+      setPermissionsStaff(member);
+      setSelectedRolePermissions([]);
+      return;
+    }
+
+    setPermissionsStaff(member);
+
+    setSelectedRolePermissions(
+      assignedRole.permissions.filter((permission) =>
+        PAGE_PERMISSIONS.includes(permission)
+      )
+    );
+
+    setPermissionSaveError("");
+  };
+
+  // Update selected permissions
+  const handleRolePermissionChange = (
+    permission: Permission,
+    checked: boolean
+  ) => {
+    setSelectedRolePermissions((current) => {
+      if (checked) {
+        return current.includes(permission)
+          ? current
+          : [...current, permission];
+      }
+
+      return current.filter((item) => item !== permission);
+    });
+
+    setPermissionSaveError("");
+  };
+
+  // Save updated role permissions
+  const handleSaveRolePermissions = () => {
+    if (!permissionsStaff) return;
+
+    const assignedRole = roles.find(
+      (item) => item.name === permissionsStaff.role
+    );
+
+    if (!assignedRole) {
+      setPermissionSaveError("The assigned role could not be found.");
+      return;
+    }
+
+    if (selectedRolePermissions.length === 0) {
+      setPermissionSaveError(
+        "Select at least one permission for this role."
+      );
+      return;
+    }
+
+    // Save through RoleContext so its existing persistence logic is used.
+    updateRole({
+      ...assignedRole,
+      permissions: selectedRolePermissions,
+    });
+
+    setPermissionsStaff(null);
+    setSelectedRolePermissions([]);
+    setPermissionSaveError("");
+  };
+
+  // Save staff
   const handleSaveStaff = async () => {
     const errors: {
       name?: string;
@@ -291,42 +430,29 @@ const StaffPage = () => {
       password?: string;
     } = {};
 
-    //NAME VALIDATION
-
     if (!name.trim()) {
       errors.name = "Name is required.";
     }
 
-    //EMAIL VALIDATION
-
     if (!email.trim()) {
       errors.email = "Email is required.";
-    } else if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        email.trim()
-      )
-    ) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       errors.email = "Enter a valid email address.";
     }
-
-    //PHONE VALIDATION
 
     if (!phone.trim()) {
       errors.phone = "Phone number is required.";
     }
 
-    // PASSWORD VALIDATION
-
-   if (editingStaff && password && password.length < 8) {
-    errors.password = "Password must be at least 8 characters.";
-   }
-
-    //DUPLICATE EMAIL
+    if (editingStaff && password && password.length < 8) {
+      errors.password = "Password must be at least 8 characters.";
+    }
 
     const duplicateEmail = staff.some(
       (member) =>
         member.id !== editingStaff?.id &&
-        member.email.trim().toLowerCase() === email.trim().toLowerCase()
+        member.email.trim().toLowerCase() ===
+          email.trim().toLowerCase()
     );
 
     if (duplicateEmail) {
@@ -334,15 +460,12 @@ const StaffPage = () => {
         "This email is already assigned to another staff account.";
     }
 
-   //STOP IF VALIDATION FAILED
-
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
 
-   //UPDATE EXISTING STAFF
-
+    // Update existing staff
     if (editingStaff) {
       const updatedStaff: Staff = {
         ...editingStaff,
@@ -351,14 +474,10 @@ const StaffPage = () => {
         phone: phone.trim(),
         role: formRole,
         status: formStatus,
-        ...(password
-          ? { password }
-          : {}),
+        ...(password ? { password } : {}),
       };
 
-      const updated = updateStaff(
-        updatedStaff
-      );
+      const updated = updateStaff(updatedStaff);
 
       if (!updated) {
         setFormErrors({
@@ -367,21 +486,17 @@ const StaffPage = () => {
         });
         return;
       }
-    }
-
-    //ADD NEW STAFF
-
-    else {
-
+    } else {
+      // Add new staff
       const temporaryPassword = generateTemporaryPassword();
 
-      const newStaff: Omit<Staff,"id"> = {
+      const newStaff: Omit<Staff, "id"> = {
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
         role: formRole,
         status: formStatus,
-        createdAt:new Date().toISOString(),
+        createdAt: new Date().toISOString(),
         password: temporaryPassword,
         passwordSet: true,
         mustResetPassword: true,
@@ -396,29 +511,30 @@ const StaffPage = () => {
         });
         return;
       }
-      try{
+
+      try {
         await sendStaffInvitationEmail({
           email: email.trim(),
           staff_name: name.trim(),
           staff_email: email.trim(),
           temporary_password: temporaryPassword,
         });
-      }catch(error){
-        console.error("Failed to send staff invitation email:", error);
+      } catch (error) {
+        console.error(
+          "Failed to send staff invitation email:",
+          error
+        );
 
         setFormErrors({
           email:
-          "Staff was added, but the invitation email could not be sent.",
-        })
+            "Staff was added, but the invitation email could not be sent.",
+        });
       }
     }
-
-   //CLOSE FORM
 
     setShowForm(false);
     resetForm();
   };
-
 
   return (
     <Box
@@ -428,29 +544,19 @@ const StaffPage = () => {
         height: "100%",
         minHeight: 0,
         bgcolor: "background.default",
-        p: {
-          xs: 2,
-          md: 3,
-        },
-      }}>
-
+        p: { xs: 2, md: 3 },
+      }}
+    >
       <Box
         sx={{
           mb: 3,
           display: "flex",
-          flexDirection: {
-            xs: "column",
-            sm: "row",
-          },
-          alignItems: {
-            sm: "center",
-          },
-          justifyContent:
-            "space-between",
-
+          flexDirection: { xs: "column", sm: "row" },
+          alignItems: { sm: "center" },
+          justifyContent: "space-between",
           gap: 2,
-        }}>
-
+        }}
+      >
         <Box>
           <Typography variant="h1">
             Staff Management
@@ -465,21 +571,25 @@ const StaffPage = () => {
           </Typography>
         </Box>
 
-        {/* ONLY ADD STAFF BUTTON */}
-        <Box sx = {{display: "flex", gap: 1}}>
-          <Button variant="outlined"
-          onClick={handleOpenRoleForm}>
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <Button
+            variant="outlined"
+            onClick={handleOpenRoleForm}
+          >
             Add Role
           </Button>
-          <Button variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleAddStaff}>
+
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleAddStaff}
+          >
             Add Staff
           </Button>
         </Box>
       </Box>
 
-      <StaffStats staff={staff}/>
+      <StaffStats staff={staff} />
 
       <StaffFilters
         search={search}
@@ -500,34 +610,26 @@ const StaffPage = () => {
         onView={handleViewStaff}
         onEdit={handleEditStaff}
         onDelete={handleDeleteStaff}
+        onManagePermissions={handleManagePermissions}
       />
 
       <StaffDialogs
         selectedStaff={selectedStaff}
         showForm={showForm}
         editingStaff={editingStaff}
-
         name={name}
         email={email}
         phone={phone}
-
         formRole={formRole}
         formStatus={formStatus}
-
         formErrors={formErrors}
-
-        onCloseDetails={() =>
-          setSelectedStaffId(null)
-        }
-
+        onCloseDetails={() => setSelectedStaffId(null)}
         onCloseForm={() => {
           setShowForm(false);
           resetForm();
         }}
-
         onNameChange={(value) => {
           setName(value);
-
           if (formErrors.name) {
             setFormErrors((previous) => ({
               ...previous,
@@ -535,10 +637,8 @@ const StaffPage = () => {
             }));
           }
         }}
-
         onEmailChange={(value) => {
           setEmail(value);
-
           if (formErrors.email) {
             setFormErrors((previous) => ({
               ...previous,
@@ -546,10 +646,8 @@ const StaffPage = () => {
             }));
           }
         }}
-
         onPhoneChange={(value) => {
           setPhone(value);
-
           if (formErrors.phone) {
             setFormErrors((previous) => ({
               ...previous,
@@ -557,82 +655,327 @@ const StaffPage = () => {
             }));
           }
         }}
-
         onRoleChange={setFormRole}
         onStatusChange={setFormStatus}
         onSave={handleSaveStaff}
       />
 
-      <Dialog 
-      open={showRoleForm}
-      onClose={handleCloseRoleForm}
-      fullWidth
-      maxWidth="sm"
+      {/* Add Role dialog */}
+      <Dialog
+        open={showRoleForm}
+        onClose={handleCloseRoleForm}
+        fullWidth
+        maxWidth="sm"
       >
-
         <DialogTitle>Add Role</DialogTitle>
 
         <DialogContent>
           <TextField
-          fullWidth
-          label="Role Name"
-          value={roleName}
-          onChange={(event) => {
-            setRoleName(event.target.value);
-            setRoleError("");
-          }}
-          margin="normal"
-          placeholder="Example: Manager"
+            fullWidth
+            label="Role Name"
+            value={roleName}
+            onChange={(event) => {
+              setRoleName(event.target.value);
+              setRoleError("");
+            }}
+            margin="normal"
+            placeholder="Example: Manager"
           />
 
-           <Typography
-           variant="subtitle1"
-           sx={{ mt: 2, mb: 1 }}
-           >
-              Permissions
-           </Typography>
+          <Typography
+            variant="subtitle1"
+            sx={{ mt: 2, mb: 1 }}
+          >
+            Permissions
+          </Typography>
 
-           <FormGroup>
-            {availablePermissions.map((permission) => (
-              <FormControlLabel
-              key={permission}
-              control={
-              <Checkbox
-              checked={rolePermissions.includes(permission)}
-              onChange={() =>
-                handlePermissionChange(permission)
-              }/>
-             }
-             label={permission}
-             />
-             ))}
-             </FormGroup>
-             
-             {roleError && (
-              <Typography
+          <Box
+            sx={{
+              maxHeight: 280,
+              overflowY: "auto",
+              border: 1,
+              borderColor: "divider",
+              borderRadius: 1,
+              p: 1,
+            }}
+          >
+            <FormGroup>
+              {visiblePermissions.map((permission) => (
+                <FormControlLabel
+                  key={permission}
+                  control={
+                    <Checkbox
+                      checked={rolePermissions.includes(permission)}
+                      onChange={() =>
+                        handlePermissionChange(permission)
+                      }
+                    />
+                  }
+                  label={permission}
+                />
+              ))}
+            </FormGroup>
+          </Box>
+
+          <Button
+            sx={{ mt: 1 }}
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => setShowPermissionPicker(true)}
+            disabled={permissionsNotDisplayed.length === 0}
+          >
+            Add More Permissions
+          </Button>
+
+          {roleError && (
+            <Typography
               color="error"
               variant="body2"
               sx={{ mt: 1 }}
-              >
-                {roleError}
-                </Typography>
-              )}
-              </DialogContent>
-              
-              <DialogActions>
-                <Button onClick={handleCloseRoleForm}>
-                  Cancel
-                </Button>
+            >
+              {roleError}
+            </Typography>
+          )}
+        </DialogContent>
 
-                <Button
-                variant="contained"
-                onClick={handleSaveRole}
-                >
-                  Create Role
-                  </Button>
-            </DialogActions>
+        <DialogActions>
+          <Button onClick={handleCloseRoleForm}>
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={handleSaveRole}
+          >
+            Create Role
+          </Button>
+        </DialogActions>
       </Dialog>
 
+      {/* Add More Permissions picker */}
+      <Dialog
+        open={showPermissionPicker}
+        onClose={handleClosePermissionPicker}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Add More Permissions</DialogTitle>
+
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Select a registered page permission to add it to the role form.
+          </DialogContentText>
+
+          {permissionsNotDisplayed.length > 0 ? (
+            <List disablePadding>
+              {permissionsNotDisplayed.map((permission) => (
+                <ListItem
+                  key={permission}
+                  disablePadding
+                  sx={{ mb: 1 }}
+                >
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    onClick={() => handleAddPermission(permission)}
+                    sx={{ justifyContent: "flex-start" }}
+                  >
+                    <AddIcon sx={{ mr: 1 }} />
+                    {permission}
+                  </Button>
+                </ListItem>
+              ))}
+            </List>
+          ) : (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+            >
+              All registered page permissions are already displayed.
+            </Typography>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={handleClosePermissionPicker}>
+            Done
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Manage Role Permissions dialog */}
+      <Dialog
+        open={Boolean(permissionsStaff)}
+        onClose={() => {
+          setPermissionsStaff(null);
+          setPermissionSaveError("");
+        }}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Avatar
+              sx={{
+                bgcolor: "primary.light",
+                color: "primary.dark",
+              }}
+            >
+              <SecurityIcon />
+            </Avatar>
+
+            <Box>
+              <Typography variant="h6">
+                Manage Role Permissions
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Update which pages this role can access.
+              </Typography>
+            </Box>
+          </Box>
+        </DialogTitle>
+
+        <Divider />
+
+        <DialogContent>
+          {permissionsStaff && (
+            <Box
+              sx={{
+                p: 2,
+                mb: 3,
+                border: 1,
+                borderColor: "divider",
+                borderRadius: 2,
+                bgcolor: "action.hover",
+              }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                Staff Member
+              </Typography>
+
+              <Typography fontWeight={600}>
+                {permissionsStaff.name}
+              </Typography>
+
+              <Typography variant="body2" color="text.secondary">
+                Staff ID: {permissionsStaff.id}
+              </Typography>
+
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mt: 1, display: "block" }}
+              >
+                Assigned Role
+              </Typography>
+
+              <Typography fontWeight={500}>
+                {permissionsStaff.role}
+              </Typography>
+            </Box>
+          )}
+
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 2,
+              mb: 1,
+            }}
+          >
+            <Typography variant="h6">
+              Page Permissions
+            </Typography>
+
+            <Chip
+              size="small"
+              color="primary"
+              label={`${selectedRolePermissions.length} of ${PAGE_PERMISSIONS.length} selected`}
+            />
+          </Box>
+
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mb: 2 }}
+          >
+            Uncheck a permission to remove access for everyone assigned
+            to this role.
+          </Typography>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "1fr 1fr",
+              },
+              gap: 1.5,
+            }}
+          >
+            {PAGE_PERMISSIONS.map((permission) => (
+              <Box
+                key={permission}
+                sx={{
+                  border: 1,
+                  borderColor: selectedRolePermissions.includes(permission)
+                    ? "primary.light"
+                    : "divider",
+                  borderRadius: 2,
+                  px: 1.5,
+                  py: 0.5,
+                }}
+              >
+                <FormControlLabel
+                  sx={{ width: "100%", m: 0 }}
+                  control={
+                    <Checkbox
+                      checked={selectedRolePermissions.includes(permission)}
+                      onChange={(event) =>
+                        handleRolePermissionChange(
+                          permission,
+                          event.target.checked
+                        )
+                      }
+                    />
+                  }
+                  label={
+                    <Typography variant="body2">
+                      {permission.charAt(0).toUpperCase() +
+                        permission.slice(1)}
+                    </Typography>
+                  }
+                />
+              </Box>
+            ))}
+          </Box>
+
+          {permissionSaveError && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {permissionSaveError}
+            </Alert>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => {
+              setPermissionsStaff(null);
+              setPermissionSaveError("");
+            }}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={handleSaveRolePermissions}
+          >
+            Save Changes
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

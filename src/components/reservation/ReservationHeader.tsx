@@ -2,6 +2,9 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import AddIcon from "@mui/icons-material/Add";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+
+import { useNavigate } from "react-router-dom";
 
 interface ReservationHeaderProps {
   onAddReservation: () => void;
@@ -10,6 +13,8 @@ interface ReservationHeaderProps {
 const ReservationHeader = ({
   onAddReservation,
 }: ReservationHeaderProps) => {
+  const navigate = useNavigate();
+
   return (
     <Box
       sx={{
@@ -27,15 +32,27 @@ const ReservationHeader = ({
         </Typography>
       </Box>
 
-      <Button
-        variant="contained"
-        color="primary"
-        startIcon={<AddIcon />}
-        onClick={onAddReservation}
-      >
-        Add Reservation
-      </Button>
-    </Box>
+      <Box
+        sx={{ display: "flex", gap:1 }}>
+          <Button
+          variant="outlined"
+          color="primary"
+          startIcon={<AccessTimeIcon/>}
+          onClick={() => navigate("/reservation-time-slots")}
+          >
+            Manage Time Slots
+          </Button>
+          
+          <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={onAddReservation}
+          >
+            Add Reservation
+          </Button>
+        </Box>
+     </Box>
   );
 };
 

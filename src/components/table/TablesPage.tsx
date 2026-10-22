@@ -1,3 +1,4 @@
+
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
@@ -15,8 +16,11 @@ import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import CardActions from "@mui/material/CardActions";
 import InputAdornment from "@mui/material/InputAdornment";
+import MenuItem from "@mui/material/MenuItem";
+
 import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
+import LayersIcon from "@mui/icons-material/Layers";
 import CloseIcon from "@mui/icons-material/Close";
 import PeopleIcon from "@mui/icons-material/People";
 
@@ -28,9 +32,13 @@ import { useAppPreferences } from "../../context/AppPreferencesContext";
 import type { RestaurantTable, TableStatus } from "../../types/table";
 import { getNextRecordId } from "../../utils/recordIds";
 import TableFloor from "./TableFloor";
+import TableSummary from "./TablesSummary";
 
 const TABLE_NOTICE_STORAGE_KEY = "restaurant_table_notice";
 const TABLE_PAGE_STATE_KEY = "restaurant_table_page_state";
+const SECTIONS_STORAGE_KEY = "restaurant_sections";
+
+const DEFAULT_SECTIONS = ["Indoor", "Outdoor", "Private"];
 
 const TablesPage = () => {
   const navigate = useNavigate();
@@ -46,30 +54,68 @@ const TablesPage = () => {
   const { preferences } = useAppPreferences();
 
   const [initialPageState] = useState(() => {
-  try {
-    const saved = localStorage.getItem(TABLE_PAGE_STATE_KEY);
-    return saved ? JSON.parse(saved) : {};
-  } catch {
-    return {};
-  }
-});
+    try {
+      const saved = localStorage.getItem(TABLE_PAGE_STATE_KEY);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
-const [search, setSearch] = useState<string>(
-  () => initialPageState.search ?? ""
-);
+  // Restore saved sections, including sections with no tables.
+  const [sections, setSections] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(SECTIONS_STORAGE_KEY);
+      const savedSections: unknown = saved
+        ? JSON.parse(saved)
+        : [];
 
-const [selectedSection, setSelectedSection] = useState<string>(
-  () => initialPageState.selectedSection ?? "Indoor"
-);
+      const validSavedSections = Array.isArray(savedSections)
+        ? savedSections.filter(
+            (item): item is string =>
+              typeof item === "string" && item.trim() !== ""
+          )
+        : [];
+
+      const combined = [
+        ...DEFAULT_SECTIONS,
+        ...validSavedSections,
+      ];
+
+      return combined.filter(
+        (item, index) =>
+          combined.findIndex(
+            (section) =>
+              section.toLowerCase() === item.toLowerCase()
+          ) === index
+      );
+    } catch {
+      return DEFAULT_SECTIONS;
+    }
+  });
+
+  const [showSectionForm, setShowSectionForm] = useState(false);
+  const [newSectionName, setNewSectionName] = useState("");
+  const [sectionError, setSectionError] = useState("");
+
+  const [search, setSearch] = useState<string>(
+    () => initialPageState.search ?? ""
+  );
+
+  const [selectedSection, setSelectedSection] = useState<string>(
+    () => initialPageState.selectedSection ?? "Indoor"
+  );
+
   const [selectedTable, setSelectedTable] =
     useState<RestaurantTable | null>(null);
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
   const [menuAnchorEl, setMenuAnchorEl] =
     useState<null | HTMLElement>(null);
 
   const [showForm, setShowForm] = useState<boolean>(
-  () => initialPageState.showForm ?? false
+    () => initialPageState.showForm ?? false
   );
 
   const [tableNotice, setTableNotice] = useState<string | null>(() =>
@@ -77,21 +123,23 @@ const [selectedSection, setSelectedSection] = useState<string>(
   );
 
   const [editingTableId, setEditingTableId] = useState<string | null>(
-  () => initialPageState.editingTableId ?? null
-);
+    () => initialPageState.editingTableId ?? null
+  );
 
-const editingTable =
-  tables.find((table) => table.id === editingTableId) ?? null;
+  const editingTable =
+    tables.find((table) => table.id === editingTableId) ?? null;
 
   const [tableNumber, setTableNumber] = useState<string>(
-  () => initialPageState.tableNumber ?? ""
-);
- const [capacity, setCapacity] = useState<string>(
-  () => initialPageState.capacity ?? ""
-);
+    () => initialPageState.tableNumber ?? ""
+  );
+
+  const [capacity, setCapacity] = useState<string>(
+    () => initialPageState.capacity ?? ""
+  );
+
   const [section, setSection] = useState<string>(
-  () => initialPageState.section ?? ""
-);
+    () => initialPageState.section ?? ""
+  );
 
   const [formErrors, setFormErrors] = useState<{
     tableNumber?: string;
@@ -99,35 +147,88 @@ const editingTable =
     section?: string;
   }>({});
 
+  // Include sections already used by existing tables.
+  // This also supports sections created before section storage existed.
   useEffect(() => {
-  localStorage.setItem(
-    TABLE_PAGE_STATE_KEY,
-    JSON.stringify({
-      search,
-      selectedSection,
-      showForm,
-      editingTableId,
-      tableNumber,
-      capacity,
-      section,
-    })
-  );
-}, [
-  search,
-  selectedSection,
-  showForm,
-  editingTableId,
-  tableNumber,
-  capacity,
-  section,
-]);
+    const missingSections = tables
+      .map((table) => table.section.trim())
+      .filter(
+        (tableSection) =>
+          tableSection !== "" &&
+          !sections.some(
+            (existing) =>
+              existing.toLowerCase() === tableSection.toLowerCase()
+          )
+      );
 
+    if (missingSections.length > 0) {
+      setSections((previous) => {
+        const updated = [...previous];
+
+        missingSections.forEach((newSection) => {
+          if (
+            !updated.some(
+              (existing) =>
+                existing.toLowerCase() === newSection.toLowerCase()
+            )
+          ) {
+            updated.push(newSection);
+          }
+        });
+
+        return updated;
+      });
+    }
+  }, [tables, sections]);
+
+  // Persist section names separately from table records.
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        SECTIONS_STORAGE_KEY,
+        JSON.stringify(sections)
+      );
+    } catch (error) {
+      console.error("Failed to save sections:", error);
+    }
+  }, [sections]);
+
+  // Persist table-page filters and unfinished form state.
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        TABLE_PAGE_STATE_KEY,
+        JSON.stringify({
+          search,
+          selectedSection,
+          showForm,
+          editingTableId,
+          tableNumber,
+          capacity,
+          section,
+        })
+      );
+    } catch (error) {
+      console.error("Failed to save table page state:", error);
+    }
+  }, [
+    search,
+    selectedSection,
+    showForm,
+    editingTableId,
+    tableNumber,
+    capacity,
+    section,
+  ]);
+
+  // Remove the stored notice after it has been loaded.
   useEffect(() => {
     if (tableNotice) {
       sessionStorage.removeItem(TABLE_NOTICE_STORAGE_KEY);
     }
   }, [tableNotice]);
 
+  // Automatically hide table notifications after five seconds.
   useEffect(() => {
     if (!tableNotice) return;
 
@@ -139,11 +240,7 @@ const editingTable =
     return () => window.clearTimeout(timeoutId);
   }, [tableNotice]);
 
-  const sections = useMemo(
-    () => Array.from(new Set(tables.map((table) => table.section))),
-    [tables]
-  );
-
+  // Filter tables by search text and selected section.
   const filteredTables = useMemo(() => {
     const searchValue = search.trim().toLowerCase();
 
@@ -158,6 +255,7 @@ const editingTable =
     });
   }, [tables, search, selectedSection]);
 
+  // Summary counts passed to TablesSummary.
   const totalTables = tables.length;
 
   const availableTables = tables.filter(
@@ -181,6 +279,37 @@ const editingTable =
     setMenuAnchorEl(null);
   };
 
+  // Add a new section with duplicate-name validation.
+  const handleAddSection = () => {
+    const name = newSectionName.trim();
+
+    if (!name) {
+      setSectionError("Please enter a section name.");
+      return;
+    }
+
+    const alreadyExists = sections.some(
+      (existing) =>
+        existing.toLowerCase() === name.toLowerCase()
+    );
+
+    if (alreadyExists) {
+      setSectionError("This section already exists.");
+      return;
+    }
+
+    setSections((previous) => [...previous, name]);
+
+    // Select the new section so the user can immediately use it.
+    setSelectedSection(name);
+    setSection(name);
+
+    setNewSectionName("");
+    setSectionError("");
+    setShowSectionForm(false);
+  };
+
+  // Validate and save a new table or an edited table.
   const handleSubmitTable = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -216,6 +345,13 @@ const editingTable =
 
     if (!trimmedSection) {
       errors.section = "Section is required.";
+    } else if (
+      !sections.some(
+        (item) =>
+          item.toLowerCase() === trimmedSection.toLowerCase()
+      )
+    ) {
+      errors.section = "Please select a valid section.";
     }
 
     const duplicateTable = tables.some(
@@ -258,6 +394,7 @@ const editingTable =
       addTable(newTable);
     }
 
+    setSelectedSection(trimmedSection);
     handleCloseForm();
   };
 
@@ -329,7 +466,11 @@ const editingTable =
     setEditingTableId(null);
     setTableNumber("");
     setCapacity("");
-    setSection(selectedSection);
+    setSection(
+      sections.includes(selectedSection)
+        ? selectedSection
+        : sections[0] ?? ""
+    );
     setFormErrors({});
     setShowForm(true);
   };
@@ -348,7 +489,7 @@ const editingTable =
       sx={{
         display: "flex",
         flexDirection: "column",
-        gap: 3,
+        gap: 2,
         height: "100%",
         minHeight: 0,
       }}
@@ -369,6 +510,7 @@ const editingTable =
         </Alert>
       )}
 
+      {/* Page heading and action buttons */}
       <Box
         sx={{
           display: "flex",
@@ -389,246 +531,86 @@ const editingTable =
           </Typography>
         </Box>
 
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleOpenAddForm}
-        >
-          Add Table
-        </Button>
-      </Box>
-
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 6, sm: 4, lg: 2.4 }}>
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-              }}
-            >
-              Total
-            </Typography>
-            <Typography
-              variant="h4"
-              sx={{ mt: 1, fontWeight: 700, fontSize: "1.5rem" }}
-            >
-              {totalTables}
-            </Typography>
-          </Paper>
-        </Grid>
-
-        <Grid size={{ xs: 6, sm: 4, lg: 2.4 }}>
-          <Paper
-            variant="outlined"
-            sx={{ p: 2, bgcolor: "#ecfdf5", borderColor: "#a7f3d0" }}
-          >
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-                color: "#047857",
-              }}
-            >
-              Available
-            </Typography>
-            <Typography
-              variant="h4"
-              sx={{
-                mt: 1,
-                fontWeight: 700,
-                fontSize: "1.5rem",
-                color: "#047857",
-              }}
-            >
-              {availableTables}
-            </Typography>
-          </Paper>
-        </Grid>
-
-        <Grid size={{ xs: 6, sm: 4, lg: 2.4 }}>
-          <Paper
-            variant="outlined"
-            sx={{ p: 2, bgcolor: "#fef2f2", borderColor: "#fecaca" }}
-          >
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-                color: "#b91c1c",
-              }}
-            >
-              Occupied
-            </Typography>
-            <Typography
-              variant="h4"
-              sx={{
-                mt: 1,
-                fontWeight: 700,
-                fontSize: "1.5rem",
-                color: "#b91c1c",
-              }}
-            >
-              {occupiedTables}
-            </Typography>
-          </Paper>
-        </Grid>
-
-        <Grid size={{ xs: 6, sm: 4, lg: 2.4 }}>
-          <Paper
-            variant="outlined"
-            sx={{ p: 2, bgcolor: "#fffbeb", borderColor: "#fde68a" }}
-          >
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-                color: "#b45309",
-              }}
-            >
-              Reserved
-            </Typography>
-            <Typography
-              variant="h4"
-              sx={{
-                mt: 1,
-                fontWeight: 700,
-                fontSize: "1.5rem",
-                color: "#b45309",
-              }}
-            >
-              {reservedTables}
-            </Typography>
-          </Paper>
-        </Grid>
-
-        <Grid size={{ xs: 6, sm: 4, lg: 2.4 }}>
-          <Paper
-            variant="outlined"
-            sx={{ p: 2, bgcolor: "#eff6ff", borderColor: "#bfdbfe" }}
-          >
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-                color: "#1d4ed8",
-              }}
-            >
-              Cleaning
-            </Typography>
-            <Typography
-              variant="h4"
-              sx={{
-                mt: 1,
-                fontWeight: 700,
-                fontSize: "1.5rem",
-                color: "#1d4ed8",
-              }}
-            >
-              {cleaningTables}
-            </Typography>
-          </Paper>
-        </Grid>
-      </Grid>
-
-      <Paper variant="outlined" sx={{ p: 2 }}>
         <Box
           sx={{
             display: "flex",
-            flexDirection: { xs: "column", lg: "row" },
-            alignItems: { lg: "center" },
-            justifyContent: "space-between",
-            gap: 2,
+            flexWrap: "wrap",
+            gap: 1,
           }}
         >
-          <TextField
-            size="small"
-            placeholder="Search table or section..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            sx={{ width: "100%", maxWidth: { lg: 360 } }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
-              endAdornment: search ? (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    onClick={() => setSearch("")}
-                    aria-label="Clear search"
-                    edge="end"
-                  >
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ) : undefined,
+          <Button
+            variant="outlined"
+            startIcon={<LayersIcon />}
+            onClick={() => {
+              setNewSectionName("");
+              setSectionError("");
+              setShowSectionForm(true);
             }}
-          />
+            sx={{
+              textTransform: "none",
+              borderRadius: 2,
+              fontWeight: 600,
+            }}
+          >
+            Add Section
+          </Button>
 
-          <Box sx={{ display: "flex", gap: 1, overflowX: "auto", pb: 0.5 }}>
-            {sections.map((sectionName) => {
-              const count = tables.filter(
-                (table) => table.section === sectionName
-              ).length;
-
-              const isActive = selectedSection === sectionName;
-
-              return (
-                <Button
-                  key={sectionName}
-                  size="small"
-                  variant={isActive ? "contained" : "outlined"}
-                  onClick={() => setSelectedSection(sectionName)}
-                  sx={{
-                    flexShrink: 0,
-                    bgcolor: isActive ? "grey.900" : "background.paper",
-                    color: isActive ? "common.white" : "text.secondary",
-                    borderColor: isActive ? "grey.900" : "grey.300",
-                    "&:hover": {
-                      bgcolor: isActive ? "grey.800" : "grey.50",
-                    },
-                  }}
-                >
-                  {sectionName}
-                  <Chip
-                    label={count}
-                    size="small"
-                    sx={{
-                      ml: 1,
-                      height: 20,
-                      fontSize: "0.7rem",
-                      bgcolor: isActive
-                        ? "rgba(255,255,255,0.2)"
-                        : "grey.100",
-                      color: isActive
-                        ? "common.white"
-                        : "text.secondary",
-                    }}
-                  />
-                </Button>
-              );
-            })}
-          </Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleOpenAddForm}
+          >
+            Add Table
+          </Button>
         </Box>
+      </Box>
+
+      {/* Summary cards */}
+      <TableSummary
+        totalTables={totalTables}
+        availableTables={availableTables}
+        occupiedTables={occupiedTables}
+        reservedTables={reservedTables}
+        cleaningTables={cleaningTables}
+      />
+
+      {/* Search */}
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <TextField
+          size="small"
+          placeholder="Search table or section..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          fullWidth
+          sx={{ maxWidth: { lg: 360 } }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+            endAdornment: search ? (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  edge="end"
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ) : undefined,
+          }}
+        />
       </Paper>
 
+      {/* Table floor */}
       <TableFloor
         tables={filteredTables}
         selectedSection={selectedSection}
+        sections={sections}
+        onSectionChange={setSelectedSection}
         openMenuId={openMenuId}
         menuAnchorEl={menuAnchorEl}
         onOpenTable={handleOpenTable}
@@ -640,7 +622,64 @@ const editingTable =
           setMenuAnchorEl(anchor);
         }}
         onCloseMenu={closeActionMenu}
+        onTablePositionChange={(tableId, x, y) => {
+          const table = tables.find((item) => item.id === tableId);
+
+          if (table) {
+            updateTable({ ...table, x, y });
+          }
+        }}
       />
+
+      {/* Add Section dialog */}
+      <Dialog
+        open={showSectionForm}
+        onClose={() => setShowSectionForm(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Add Section</DialogTitle>
+
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            margin="normal"
+            label="Section Name"
+            placeholder="e.g. Rooftop"
+            value={newSectionName}
+            onChange={(event) => {
+              setNewSectionName(event.target.value);
+              setSectionError("");
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                handleAddSection();
+              }
+            }}
+            error={Boolean(sectionError)}
+            helperText={sectionError || "Enter a unique section name."}
+          />
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setShowSectionForm(false)}
+            color="inherit"
+          >
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleAddSection}
+          >
+            Add Section
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Table details dialog */}
       <Dialog
@@ -663,6 +702,7 @@ const editingTable =
                 <Typography variant="h3">
                   Table {selectedTable.tableNumber}
                 </Typography>
+
                 <Typography
                   variant="body2"
                   color="text.secondary"
@@ -690,6 +730,7 @@ const editingTable =
                       <Typography variant="caption" color="text.secondary">
                         Capacity
                       </Typography>
+
                       <Box
                         sx={{
                           mt: 0.5,
@@ -715,6 +756,7 @@ const editingTable =
                       <Typography variant="caption" color="text.secondary">
                         Section
                       </Typography>
+
                       <Typography
                         variant="subtitle2"
                         fontWeight={600}
@@ -771,7 +813,11 @@ const editingTable =
                 </CardContent>
               </Card>
 
-              <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+              <Typography
+                variant="subtitle2"
+                fontWeight={600}
+                sx={{ mb: 1 }}
+              >
                 Table Actions
               </Typography>
 
@@ -836,7 +882,7 @@ const editingTable =
                         color: "#047857",
                         "&:hover": {
                           bgcolor: "#d1fae5",
-                          borderColor: "#6ee7b7",
+                          borderColor: "#6ee7b6",
                         },
                       }}
                     >
@@ -902,12 +948,13 @@ const editingTable =
           }}
         >
           <Box>
-            <Typography 
-            variant="h3"
-            sx={{ fontSize: "1.5rem", lineHeight: 1.3 }}
+            <Typography
+              variant="h3"
+              sx={{ fontSize: "1.5rem", lineHeight: 1.3 }}
             >
               {editingTable ? "Edit Table" : "Add Table"}
             </Typography>
+
             <Typography
               variant="body2"
               color="text.secondary"
@@ -982,6 +1029,7 @@ const editingTable =
             </Box>
 
             <TextField
+              select
               label="Section"
               fullWidth
               value={section}
@@ -992,10 +1040,15 @@ const editingTable =
                   section: undefined,
                 }));
               }}
-              placeholder="e.g. Main Room, Banquet Room, Outdoor"
               error={Boolean(formErrors.section)}
               helperText={formErrors.section}
-            />
+            >
+              {sections.map((item) => (
+                <MenuItem key={item} value={item}>
+                  {item}
+                </MenuItem>
+              ))}
+            </TextField>
           </DialogContent>
 
           <CardActions
@@ -1009,6 +1062,7 @@ const editingTable =
             <Button variant="outlined" onClick={handleCloseForm}>
               Cancel
             </Button>
+
             <Button type="submit" variant="contained" color="primary">
               {editingTable ? "Save Changes" : "Add Table"}
             </Button>

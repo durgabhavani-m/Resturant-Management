@@ -10,4 +10,6 @@ export interface RestaurantTable{
     capacity:number;
     section:string;
     status:TableStatus;
+    x?: number;
+    y?: number;
 }
