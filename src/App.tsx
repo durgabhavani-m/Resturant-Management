@@ -17,9 +17,10 @@ import TableOrderPage from "./components/table/TableOrderPage";
 import StaffPage from "./components/staff/StaffPage";
 import BillingPage from "./components/BillingPage";
 import SettingsPage from "./components/settings/SettingsPage";
+import TimeSlotManagementPage from "./components/reservation/TimeSlotManagementPage";
+
+
 import { AppThemeProvider } from "./components/settings/ThemeContext";
-
-
 import { TableProvider } from "./context/TableContext";
 import { OrderProvider } from "./context/OrderContext";
 import { MenuProvider } from "./context/MenuContext";
@@ -29,154 +30,79 @@ import { StaffProvider } from "./context/StaffContext";
 import { AuthProvider } from "./context/AuthContext";
 import { RestaurantProvider } from "./context/ResturantContext";
 import { RoleProvider } from "./context/RoleContext";
+import { TimeSlotProvider } from "./context/TimeSlotContext";
 
 function App() {
   return (
     <AppThemeProvider>
-      <AuthProvider>
-        <ModifierProvider>
-          <TableProvider>
-            <OrderProvider>
-              <MenuProvider>
-                <RoleProvider>
+      <RoleProvider>
+        <AuthProvider>
+          <ModifierProvider>
+            <TableProvider>
+              <OrderProvider>
+                 <MenuProvider>
                   <StaffProvider>
                     <BillingProvider>
                       <RestaurantProvider>
+                        <TimeSlotProvider>
                         <Routes>
-                          <Route
-                            path="/login"
-                            element={<LoginPage />}
-                          />
-
-                          <Route
-                            path="/forgot-password"
-                            element={<ForgotPassword />}
-                          />
-
-                          <Route
-                            path="/reset-password"
-                            element={<ResetPasswordPage />}
-                          />
-
+                          <Route path="/login" element={<LoginPage />}/>
+                        
+                          <Route path="/forgot-password" element={<ForgotPassword />}/>
+                            
+                          <Route path="/reset-password" element={<ResetPasswordPage />}/>
+                           
                           <Route element={<Layout />}>
-                            <Route
-                              element={
-                                <ProtectedRoute permission="dashboard" />
-                              }
-                            >
-                              <Route
-                                path="/dashboard"
-                                element={<Dashboard />}
-                              />
-                            </Route>
 
-                            <Route
-                              element={
-                                <ProtectedRoute permission="menu" />
-                              }
-                            >
-                              <Route
-                                path="/menu"
-                                element={<MenuPage />}
-                              />
-                              <Route
-                                path="/categories"
-                                element={<CategoryManagementPage />}
-                              />
-                              <Route
-                                path="/modifiers"
-                                element={<ModifierManagementPage />}
-                              />
-                            </Route>
+                          <Route element={ <ProtectedRoute permission="dashboard" />} >
+                          <Route path="/dashboard"  element={<Dashboard />}/>  </Route>
+                           
+                          <Route  element={ <ProtectedRoute permission="menu" /> }>
+                          <Route path="/menu" element={<MenuPage />} />
 
-                            <Route
-                              element={
-                                <ProtectedRoute permission="orders" />
-                              }
-                            >
-                              <Route
-                                path="/orders"
-                                element={<OrdersPage />}
-                              />
-                            </Route>
+                          <Route path="/categories" element={<CategoryManagementPage />}/>
 
-                            <Route
-                              element={
-                                <ProtectedRoute permission="billing" />
-                              }
-                            >
-                              <Route
-                                path="/billing"
-                                element={<BillingPage />}
-                              />
-                            </Route>
+                          <Route path="/modifiers" element={<ModifierManagementPage />}/> </Route>
 
-                            <Route
-                              element={
-                                <ProtectedRoute permission="reservations" />
-                              }
-                            >
-                              <Route
-                                path="/reservations"
-                                element={<ReservationsPage />}
-                              />
-                            </Route>
+                          <Route element={ <ProtectedRoute permission="orders" /> } >
+                          <Route path="/orders" element={<OrdersPage />} /> </Route>
 
-                            <Route
-                              element={
-                                <ProtectedRoute permission="tables" />
-                              }
-                            >
-                              <Route
-                                path="/tables"
-                                element={<TablesPage />}
-                              />
-                            </Route>
+                          <Route element={ <ProtectedRoute permission="billing" /> }>
+                          <Route path="/billing" element={<BillingPage />} />
+                          </Route>
 
-                            <Route
-                              path="/tables/:tableId/order"
-                              element={<TableOrderPage />}
-                            />
+                          <Route element={ <ProtectedRoute permission="reservations" /> } >
+                          <Route path="/reservations" element={<ReservationsPage />} />
+                          <Route path="/reservation-time-slots" element={<TimeSlotManagementPage />}/>
+                          </Route>
 
-                            <Route
-                              element={
-                                <ProtectedRoute permission="staff" />
-                              }
-                            >
-                              <Route
-                                path="/staff"
-                                element={<StaffPage />}
-                              />
-                            </Route>
+                          <Route element={ <ProtectedRoute permission="tables" /> } >
+                          <Route path="/tables" element={<TablesPage />} />
+                          </Route>
 
-                            <Route
-                              element={
-                                <ProtectedRoute permission="settings" />
-                              }
-                            >
-                              <Route
-                                path="/settings"
-                                element={<SettingsPage />}
-                              />
-                            </Route>
+                          <Route path="/tables/:tableId/order" element={<TableOrderPage />} />
 
-                            <Route
-                              path="/"
-                              element={
-                                <Navigate to="/login" replace />
-                              }
-                            />
+                          <Route element={ <ProtectedRoute permission="staff" /> } >
+                          <Route path="/staff" element={<StaffPage />}/>
+                          </Route>
+
+                          <Route element={ <ProtectedRoute permission="settings" /> } >
+                          <Route path="/settings" element={<SettingsPage />} />
+                          </Route>
+
+                          <Route path="/"  element={ <Navigate to="/login" replace />} />
                           </Route>
                         </Routes>
+                        </TimeSlotProvider>
                       </RestaurantProvider>
                     </BillingProvider>
                   </StaffProvider>
-                </RoleProvider>
-              </MenuProvider>
-            </OrderProvider>
-          </TableProvider>
-        </ModifierProvider>
-      </AuthProvider>
+                </MenuProvider>
+              </OrderProvider>
+            </TableProvider>
+          </ModifierProvider>
+        </AuthProvider>
+      </RoleProvider>
     </AppThemeProvider>
   );
 }

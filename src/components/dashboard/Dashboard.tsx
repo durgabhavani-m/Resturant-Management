@@ -52,7 +52,7 @@ const addDays = (date: Date, days: number) => {
   return result;
 };
 
-const getRangeStart = (range: DateRange, today: Date) => {
+const getRangeStart = (range: DateRange, today: Date, customStart?:string) => {
   const start = startOfDay(today);
 
   switch (range) {
@@ -80,7 +80,9 @@ const getRangeStart = (range: DateRange, today: Date) => {
       return addDays(date, 1);
     }
     case "custom":
-      return start;
+      return customStart
+      ?startOfDay(new Date(`${customStart}T00:00:00`))
+      : start;
   }
 };
 
@@ -406,7 +408,12 @@ const Dashboard = () => {
 
   const filteredOrders = validRange
     ? orders.filter((order) =>
-        isInRange(order.createdAt, startDate, endDate)
+        isInRange(
+          order.createdAt, 
+          startDate, 
+          dateRange === "custom"
+          ? addDays(endDate, 1)
+          : endDate)
       )
     : [];
 
@@ -550,21 +557,35 @@ const Dashboard = () => {
           type="date"
           value={customStart}
           onChange={(event) => {
-            setCustomStart(event.target.value);
-            localStorage.setItem(START_KEY,event.target.value);
+            const newStart = event.target.value;
+            setCustomStart(newStart);
+
+            if(customEnd && newStart > customEnd){
+              setCustomEnd("");
+              localStorage.setItem(END_KEY, "");
+            }
+            localStorage.setItem(START_KEY,newStart);
           }}
-          slotProps={{inputLabel: {shrink:true}}}
+          slotProps={{inputLabel: {shrink:true},
+        }}
           />
+
           <TextField
           size="small"
           label="To"
           type="date"
           value={customEnd}
           onChange={(event) => {
-            setCustomEnd(event.target.value);
-            localStorage.setItem(END_KEY, event.target.value);
+            const newEnd = event.target.value;
+            setCustomEnd(newEnd);
+            localStorage.setItem(END_KEY, newEnd);
           }}
-          slotProps ={{inputLabel:{shrink:true}}}
+          slotProps ={{
+            inputLabel:{shrink:true},
+            htmlInput:{
+              min: customStart || undefined,
+            }
+          }}
           />
           </>
         )}

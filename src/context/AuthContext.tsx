@@ -1,8 +1,8 @@
 import { createContext, useContext, useState } from "react";
 import type { StaffRole } from "../types/staff";
 import type { Permission } from "../types/permission";
-import { rolePermissions } from "../config/rolePermission";
-import {normalizeRecordId} from "../utils/recordIds";
+import { normalizeRecordId } from "../utils/recordIds";
+import { useRoles } from "./RoleContext";
 
 interface AuthUser {
   id: string;
@@ -28,26 +28,36 @@ export const AuthProvider = ({
   const [user, setUser] = useState<AuthUser | null>(() => {
     const storedUser = localStorage.getItem("restaurant_current_user");
 
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser) as AuthUser;
-      const normalizedUser = {
-        ...parsedUser,
-        id: normalizeRecordId(parsedUser.id, "STAFF"),
-      };
-      if (normalizedUser.id !== parsedUser.id) {
-        localStorage.setItem("restaurant_current_user", JSON.stringify(normalizedUser));
-      }
-      return normalizedUser;
+    if (!storedUser) {
+      return null;
     }
 
-    return null;
+    const parsedUser = JSON.parse(storedUser) as AuthUser;
+
+    const normalizedUser = {
+      ...parsedUser,
+      id: normalizeRecordId(parsedUser.id, "STAFF"),
+    };
+
+    if (normalizedUser.id !== parsedUser.id) {
+      localStorage.setItem(
+        "restaurant_current_user",
+        JSON.stringify(normalizedUser)
+      );
+    }
+
+    return normalizedUser;
   });
+
+  // Read the latest saved roles from RoleContext.
+  const { roles } = useRoles();
 
   const login = (loggedInUser: AuthUser) => {
     const normalizedUser = {
       ...loggedInUser,
       id: normalizeRecordId(loggedInUser.id, "STAFF"),
     };
+
     setUser(normalizedUser);
 
     localStorage.setItem(
@@ -61,10 +71,21 @@ export const AuthProvider = ({
     localStorage.removeItem("restaurant_current_user");
   };
 
-  const hasPermission = (permission: Permission) => {
-    if (!user) return false;
+  const hasPermission = (permission: Permission): boolean => {
+    if (!user) {
+      return false;
+    }
 
-    return rolePermissions[user.role].includes(permission);
+    // Find the latest role and its saved permissions.
+    const assignedRole = roles.find(
+      (role) => role.name === user.role
+    );
+
+    if (!assignedRole) {
+      return false;
+    }
+
+    return assignedRole.permissions.includes(permission);
   };
 
   return (

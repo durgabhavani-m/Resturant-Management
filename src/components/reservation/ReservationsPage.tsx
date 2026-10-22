@@ -11,8 +11,6 @@ import {
 
 import type { Reservation, ReservationStatus } from "../../types/reservation";
 import { useTable } from "../../context/TableContext";
-import { useOrder } from "../../context/OrderContext";
-import { useBilling } from "../../context/BillingContext";
 import { useAppPreferences } from "../../context/AppPreferencesContext";
 import { getNextRecordId, normalizeRecordId } from "../../utils/recordIds";
 
@@ -22,9 +20,9 @@ import ReservationHeader from "./ReservationHeader";
 import ReservationFilters from "./ReservationFilters";
 import ReservationTable from "./ReservationTable";
 import ReservationDialogs from "./ReservationDialogs";
+import { useTimeSlots } from "../../context/TimeSlotContext";
 
 const RESERVATION_STORAGE_KEY = "reservation_customers";
-const TABLE_NOTICE_STORAGE_KEY = "restaurant_table_notice";
 
 const initialReservations: Reservation[] = [
   {
@@ -66,10 +64,12 @@ const initialReservations: Reservation[] = [
 ];
 
 const ReservationsPage = () => {
-  const { tables, updateTableStatus } = useTable();
-  const { orders } = useOrder();
-  const { bills } = useBilling();
+  const { tables} = useTable();
   const { preferences } = useAppPreferences();
+  const { slots } = useTimeSlots();
+
+  const activeTimeSlots = slots.filter((slot) => slot.isActive);
+  console.log("Active time slots:", activeTimeSlots);
 
   const [search, setSearch] = usePersistentState("reservations_page_search","");
   const [section, setSection] = usePersistentState("reservations_page_section","All");
@@ -97,7 +97,7 @@ const ReservationsPage = () => {
   ReservationStatus | "All"
   >("reservations_page_status","All");
 
-  const [showForm, setShowForm] = usePersistentState("reservations_page_form_open",false);
+ const [showForm, setShowForm] = useState(false);
 
   const [editingReservation, setEditingReservation] =
   usePersistentState<Reservation | null>("reservations_page_editing",null);
@@ -107,7 +107,20 @@ const ReservationsPage = () => {
 
   const [customerName, setCustomerName] = usePersistentState("reservations_page_customer_name","");
   const [phone, setPhone] = usePersistentState("reservations_page_phone","");
-  const [date, setDate] = usePersistentState("reservations_page_date","");
+  
+  const getTodayDate = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
+const [date, setDate] = usePersistentState(
+  "reservations_page_date",
+  getTodayDate()
+);
   const [time, setTime] = usePersistentState("reservations_page_time","");
   const [guests, setGuests] = usePersistentState("reservations_page_guests","");
   const [tableNumber, setTableNumber] = usePersistentState("reservations_page_table_number","");
@@ -134,84 +147,6 @@ const ReservationsPage = () => {
   useEffect(() => {
     localStorage.setItem(RESERVATION_STORAGE_KEY, JSON.stringify(reservation));
   }, [reservation]);
-
-  useEffect(() => {
-    const tablesBeingReserved = new Set<string>();
-
-    reservation.forEach((item) => {
-      if (item.status !== "Pending" && item.status !== "Confirmed") {
-        return;
-      }
-
-      const table = tables.find(
-        (candidate) =>
-          candidate.tableNumber === item.tableNumber &&
-          candidate.section === item.tableSection
-      );
-      if (!table) return;
-
-      const paidOrder = orders.find(
-        (order) => 
-          order.tableNumber === table.tableNumber &&
-          order.tableSection === table.section &&
-          order.paymentStatus === "Paid"
-      );
-
-      const hasPaidBill = 
-      paidOrder &&
-      bills.some(
-        (bill) => 
-          bill.orderId === paidOrder.id &&
-          bill.paymentStatus === "Paid"
-      );
-
-      if (
-        table.status === "Cleaning" && 
-        hasPaidBill
-      ) {
-        setReservation((current) =>
-          current.map((candidate) =>
-            candidate.id === item.id
-              ? { ...candidate, status: "Completed" }
-              : candidate
-          )
-        );
-
-        setReservationMessage({
-          type: "success",
-          message: `Billing completed for Table ${table.tableNumber}. Reservation completed.`,
-        });
-
-        return;
-      }
-
-      if(
-        item.status === "Pending" &&
-        table.status === "Available" &&
-        table.capacity >= item.guests &&
-        !tablesBeingReserved.has(table.id)
-      ){
-        tablesBeingReserved.add(table.id);
-
-        setReservation((current) => 
-          current.map((candidate) => 
-            candidate.id === item.id
-              ? {...candidate, status:"Confirmed"}
-              : candidate
-        ));
-        updateTableStatus(table.id, "Reserved");
-
-        sessionStorage.setItem(
-          TABLE_NOTICE_STORAGE_KEY,
-          `Table ${table.tableNumber} reserved.`
-        );
-        setReservationMessage({
-          type: "success",
-          message: `Reservation confirmed. Table ${table.tableNumber} is reserved for ${item.customerName}.`,
-        });
-      }
-    });
-  }, [reservation, tables, orders, bills, updateTableStatus]);
 
   const filteredReservations = reservation.filter((item) => {
     const matchesSearch =
@@ -287,254 +222,285 @@ const ReservationsPage = () => {
     setMenuAnchorEl(null);
   };
 
-  const handleAddReservation = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  
+const handleAddReservation = (event: FormEvent<HTMLFormElement>) => {
+  event.preventDefault();
 
-    if (
-      !customerName.trim() ||
-      !phone.trim() ||
-      !date ||
-      !time ||
-      !guests ||
-      !tableNumber ||
-      !tableSection
-    ) {
-      setReservationMessage({
-        type: "error",
-        message: "Complete all required fields and select an available table.",
-      });
-      return;
+  if (
+    !customerName.trim() ||
+    !phone.trim() ||
+    !date ||
+    !time ||
+    !guests ||
+    !tableNumber ||
+    !tableSection
+  ) {
+    setReservationMessage({
+      type: "error",
+      message: "Complete all required fields and select a table.",
+    });
+    return;
+  }
+
+  // Validate phone number.
+  if (!/^\d{10}$/.test(phone.trim())) {
+    setReservationMessage({
+      type: "error",
+      message: "Phone number must contain exactly 10 digits.",
+    });
+    return;
+  }
+
+  // Prevent past-date reservations.
+  if (date < getTodayDate()) {
+    setReservationMessage({
+      type: "error",
+      message: "Reservation date cannot be in the past.",
+    });
+    return;
+  }
+
+  const guestCount = Number(guests);
+
+  if (!Number.isInteger(guestCount) || guestCount < 1) {
+    setReservationMessage({
+      type: "error",
+      message: "Guest count must be a whole number greater than zero.",
+    });
+    return;
+  }
+
+  // Allow an existing reservation to retain its previously selected slot
+  // even if that slot has since been deactivated.
+  const selectedSlotIsActive = activeTimeSlots.some(
+    (slot) => slot.startTime === time,
+  );
+
+  const existingSlotCanBeKept =
+  editingReservation !== null && editingReservation.time === time;
+
+  if (!selectedSlotIsActive && !existingSlotCanBeKept) {
+    setReservationMessage({
+      type: "error",
+      message: "Please select an active reservation time slot.",
+    });
+    return;
+  }
+
+  // Find the selected table.
+  const selectedTable = tables.find(
+    (table) =>
+      table.tableNumber === Number(tableNumber) &&
+      table.section === tableSection,
+  );
+
+  if (!selectedTable) {
+    setReservationMessage({
+      type: "error",
+      message: `Table ${tableNumber} could not be found.`,
+    });
+    return;
+  }
+
+  if (selectedTable.capacity < guestCount) {
+    setReservationMessage({
+      type: "error",
+      message: `Table ${selectedTable.tableNumber} is not suitable for ${guestCount} guests.`,
+    });
+    return;
+  }
+
+  // These reservation statuses occupy a table for the selected slot.
+  const activeStatuses: ReservationStatus[] = [
+    "Pending",
+    "Confirmed",
+    "Seated",
+  ];
+
+  // Prevent two active reservations from using the same table
+  // at the same date and time.
+  const hasTableConflict = reservation.some((item) => {
+    if (editingReservation && item.id === editingReservation.id) {
+      return false;
     }
 
-    const guestCount = Number(guests);
-    if (!Number.isInteger(guestCount) || guestCount < 1) {
-      setReservationMessage({
-        type: "error",
-        message: "Guest count must be at least one.",
-      });
-      return;
-    }
-
-    if (editingReservation) {
-      const selectedTable = tables.find(
-        (table) =>
-          table.tableNumber === Number(tableNumber) &&
-          table.section === tableSection
-      );
-
-      if (!selectedTable) {
-        setReservationMessage({
-          type: "error",
-          message: `Table ${tableNumber} is not available.`,
-        });
-        return;
-      }
-
-      if(selectedTable.status === "Cleaning"){
-        setReservationMessage({
-          type: "error",
-          message: `Table ${selectedTable.tableNumber} is currently being cleaned and cannot be reserved.`,
-        });
-        return;
-      }
-
-      const tableChanged =
-        editingReservation.tableNumber !== Number(tableNumber) ||
-        editingReservation.tableSection !== tableSection;
-
-      if (selectedTable.capacity < Number(guests)) {
-        setReservationMessage({
-          type: "error",
-          message: `Table ${selectedTable.tableNumber} is not suitable for ${guests} guests.`,
-        });
-        return;
-      }
-
-      const canConfirm =
-        selectedTable.status === "Available" ||
-        (!tableChanged &&
-          (selectedTable.status === "Reserved" ||
-            selectedTable.status === "Occupied"));
-
-      const updatedReservation: Reservation = {
-        ...editingReservation,
-        customerName: customerName.trim(),
-        phone: phone.trim(),
-        date,
-        time,
-        guests: Number(guests),
-        tableNumber: Number(tableNumber),
-        tableSection,
-        status: canConfirm ? "Confirmed" : "Pending",
-      };
-
-      setReservation((current) =>
-        current.map((item) =>
-          item.id === editingReservation.id ? updatedReservation : item
-        )
-      );
-
-      if (tableChanged) {
-        const oldTable = tables.find(
-          (table) =>
-            table.tableNumber === editingReservation.tableNumber &&
-            table.section === editingReservation.tableSection
-        );
-
-        if (oldTable?.status === "Reserved") {
-          updateTableStatus(oldTable.id, "Available");
-        }
-      }
-
-      if (selectedTable.status === "Available" && canConfirm) {
-        updateTableStatus(selectedTable.id, "Reserved");
-        sessionStorage.setItem(
-          TABLE_NOTICE_STORAGE_KEY,
-          `Table ${selectedTable.tableNumber} reserved.`
-        );
-      }
-
-      setReservationMessage({
-        type: "success",
-        message: canConfirm
-          ? `Reservation confirmed. Table ${selectedTable.tableNumber} is reserved for ${customerName}.`
-          : `Reservation is pending because Table ${selectedTable.tableNumber} is ${selectedTable.status.toLowerCase()}.`,
-      });
-    } else {
-      const selectedTable = tables.find(
-        (table) =>
-          table.tableNumber === Number(tableNumber) &&
-          table.section === tableSection
-      );
-
-      if (!selectedTable) {
-        setReservationMessage({
-          type: "error",
-          message: `Table ${tableNumber} is not available.`,
-        });
-        return;
-      }
-
-      if (selectedTable.capacity < Number(guests)) {
-        setReservationMessage({
-          type: "error",
-          message: `Table ${selectedTable.tableNumber} is not suitable for ${guests} guests.`,
-        });
-        return;
-      }
-
-      const newReservation: Reservation = {
-        id: getNextRecordId("RESERVATION", reservation.map((reservation) => reservation.id)),
-        customerName: customerName.trim(),
-        phone: phone.trim(),
-        date,
-        time,
-        guests: Number(guests),
-        tableNumber: Number(tableNumber),
-        tableSection: selectedTable.section,
-        status: selectedTable.status === "Available" ? "Confirmed" : "Pending",
-        createdAt: new Date().toISOString(),
-      };
-
-      setReservation((current) => [...current, newReservation]);
-
-      if (selectedTable.status === "Available") {
-        updateTableStatus(selectedTable.id, "Reserved");
-        sessionStorage.setItem(
-          TABLE_NOTICE_STORAGE_KEY,
-          `Table ${selectedTable.tableNumber} reserved.`
-        );
-        setReservationMessage({
-          type: "success",
-          message: `Reservation confirmed. Table ${selectedTable.tableNumber} is reserved for ${customerName}.`,
-        });
-      } else {
-        setReservationMessage({
-          type: "success",
-          message: `Reservation saved as pending. Table ${selectedTable.tableNumber} is currently ${selectedTable.status.toLowerCase()}.`,
-        });
-      }
-    }
-
-    setCustomerName("");
-    setPhone("");
-    setDate("");
-    setTime("");
-    setGuests("");
-    setTableNumber("");
-    setTableSection("");
-    setShowForm(false);
-    setEditingReservation(null);
-  };
-
-  const handleConfirmReservation = (id: string) => {
-    const reservationToConfirm = reservation.find((item) => item.id === id);
-    if (!reservationToConfirm) return;
-
-    if (reservationToConfirm.status !== "Pending") return;
-
-    const table = tables.find(
-      (item) =>
-        item.tableNumber === reservationToConfirm.tableNumber &&
-        item.section === reservationToConfirm.tableSection
+    return (
+      item.date === date &&
+      item.time === time &&
+      item.tableNumber === Number(tableNumber) &&
+      item.tableSection === tableSection &&
+      activeStatuses.includes(item.status)
     );
+  });
 
-    if (!table) {
-      setReservationMessage({
-        type: "error",
-        message: "The reserved table could not be found.",
-      });
-      return;
-    }
+  if (hasTableConflict) {
+    setReservationMessage({
+      type: "error",
+      message:
+        "This table is already reserved for the selected date and time slot.",
+    });
+    return;
+  }
 
-    if (table.status !== "Available") {
-      setReservationMessage({
-        type: "error",
-        message: `Reservation remains pending. Table ${table.tableNumber} is currently ${table.status.toLowerCase()}.`,
-      });
-      setOpenMenuId(null);
-      setMenuAnchorEl(null);
-      return;
-    }
+  if (editingReservation) {
+    const updatedReservation: Reservation = {
+      ...editingReservation,
+      customerName: customerName.trim(),
+      phone: phone.trim(),
+      date,
+      time,
+      guests: guestCount,
+      tableNumber: Number(tableNumber),
+      tableSection: selectedTable.section,
+    };
 
-    updateTableStatus(table.id, "Reserved");
     setReservation((current) =>
       current.map((item) =>
-        item.id === id ? { ...item, status: "Confirmed" } : item
-      )
+        item.id === editingReservation.id ? updatedReservation : item,
+      ),
     );
+
     setReservationMessage({
       type: "success",
-      message: `Reservation confirmed successfully. Table ${table.tableNumber} is reserved for ${reservationToConfirm.customerName}.`,
+      message: `Reservation updated successfully for ${customerName.trim()}.`,
     });
-    sessionStorage.setItem(
-      TABLE_NOTICE_STORAGE_KEY,
-      `Table ${table.tableNumber} reserved.`
-    );
+  } else {
+    const newReservation: Reservation = {
+      id: getNextRecordId(
+        "RESERVATION",
+        reservation.map((item) => item.id),
+      ),
+      customerName: customerName.trim(),
+      phone: phone.trim(),
+      date,
+      time,
+      guests: guestCount,
+      tableNumber: Number(tableNumber),
+      tableSection: selectedTable.section,
+      status: "Confirmed",
+      createdAt: new Date().toISOString(),
+    };
+
+    setReservation((current) => [...current, newReservation]);
+
+    setReservationMessage({
+      type: "success",
+      message: `Reservation confirmed for ${customerName.trim()} at Table ${selectedTable.tableNumber}.`,
+    });
+  }
+
+  // A reservation does not change the table's physical status.
+  // The table becomes Occupied when guests actually sit down,
+  // and its status is managed by the table workflow.
+
+  setCustomerName("");
+  setPhone("");
+  setDate(getTodayDate());
+  setTime("");
+  setGuests("");
+  setTableNumber("");
+  setTableSection("");
+  setShowForm(false);
+  setEditingReservation(null);
+};
+
+
+ 
+const handleConfirmReservation = (id: string) => {
+  const reservationToConfirm = reservation.find(
+    (item) => item.id === id,
+  );
+
+  if (!reservationToConfirm) return;
+  if (reservationToConfirm.status !== "Pending") return;
+
+  const table = tables.find(
+    (item) =>
+      item.tableNumber === reservationToConfirm.tableNumber &&
+      item.section === reservationToConfirm.tableSection,
+  );
+
+  if (!table) {
+    setReservationMessage({
+      type: "error",
+      message: "The reserved table could not be found.",
+    });
+    return;
+  }
+
+  const activeStatuses: ReservationStatus[] = [
+    "Pending",
+    "Confirmed",
+    "Seated",
+  ];
+
+  const hasConflict = reservation.some(
+    (item) =>
+      item.id !== id &&
+      item.date === reservationToConfirm.date &&
+      item.time === reservationToConfirm.time &&
+      item.tableNumber === reservationToConfirm.tableNumber &&
+      item.tableSection === reservationToConfirm.tableSection &&
+      activeStatuses.includes(item.status),
+  );
+
+  if (hasConflict) {
+    setReservationMessage({
+      type: "error",
+      message:
+        "This table already has another active reservation for that date and time.",
+    });
+
     setOpenMenuId(null);
     setMenuAnchorEl(null);
-  };
+    return;
+  }
 
-  const handleCancelReservation = (id: string) => {
-    const reservationToCancel = reservation.find((item) => item.id === id);
-    if (!reservationToCancel) return;
+  setReservation((current) =>
+    current.map((item) =>
+      item.id === id ? { ...item, status: "Confirmed" } : item,
+    ),
+  );
 
-    setReservation((current) =>
-      current.map((item) =>
-        item.id === id ? { ...item, status: "Cancelled" } : item
-      )
-    );
+  setReservationMessage({
+    type: "success",
+    message: `Reservation confirmed for ${reservationToConfirm.customerName}.`,
+  });
 
-    const table = tables.find(
-      (item) =>
-        item.tableNumber === reservationToCancel.tableNumber &&
-        item.section === reservationToCancel.tableSection
-    );
+  setOpenMenuId(null);
+  setMenuAnchorEl(null);
+};
 
-    if (table?.status === "Reserved") {
-      updateTableStatus(table.id, "Available");
-    }
-  };
+
+const handleCancelReservation = (id: string) => {
+  const reservationToCancel = reservation.find(
+    (item) => item.id === id,
+  );
+
+  if (!reservationToCancel) return;
+
+  if (
+    !["Pending", "Confirmed"].includes(reservationToCancel.status)
+  ) {
+    setReservationMessage({
+      type: "error",
+      message: "Only pending or confirmed reservations can be cancelled.",
+    });
+    return;
+  }
+
+  setReservation((current) =>
+    current.map((item) =>
+      item.id === id ? { ...item, status: "Cancelled" } : item,
+    ),
+  );
+
+  setReservationMessage({
+    type: "success",
+    message: `Reservation for ${reservationToCancel.customerName} cancelled successfully.`,
+  });
+};
+
 
   const handleCloseForm = () => {
     setShowForm(false);
@@ -636,7 +602,14 @@ const ReservationsPage = () => {
             label="From"
             type="date"
             value={customStart}
-            onChange={(event) => setCustomStart(event.target.value)}
+            onChange={(event) =>{
+              const newStart = event.target.value;
+              setCustomStart(newStart)
+
+              if(customEnd && newStart && customEnd < newStart){
+                setCustomEnd("");
+              }
+            }}
             slotProps={{ inputLabel: { shrink: true } }}
            />
 
@@ -646,7 +619,12 @@ const ReservationsPage = () => {
             type="date"
             value={customEnd}
             onChange={(event) => setCustomEnd(event.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
+            slotProps={{
+               inputLabel: { shrink: true },
+               htmlInput:{
+                min:customStart || undefined,
+               }
+               }}
            />
          </>
          )}
@@ -684,6 +662,7 @@ const ReservationsPage = () => {
         onPhoneChange={setPhone}
         onDateChange={setDate}
         onTimeChange={setTime}
+        timeSlots={activeTimeSlots}
         onGuestsChange={setGuests}
         onTableChange={(nextTableSection, nextTableNumber) => {
           setTableSection(nextTableSection);

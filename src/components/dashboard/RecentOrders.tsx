@@ -1,4 +1,4 @@
-import { Link as RouterLink } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Box from "@mui/material/Box";
@@ -39,6 +39,14 @@ const getOrderDateLabel = (value: string) => {
 const RecentOrders = () => {
   const { orders } = useOrder();
 
+  const navigate = useNavigate();
+
+  const handleViewAll = () => {
+    navigate("/orders",{
+      state: {showAllOrders:true}
+    });
+  };
+
   const recentOrders = [...orders]
     .sort(
       (a, b) =>
@@ -66,7 +74,7 @@ const RecentOrders = () => {
               Latest restaurant orders
             </Typography>
           </Box>
-          <Button component={RouterLink} to="/orders" size="small" color="primary">
+          <Button onClick={handleViewAll} size="small" color="primary">
             View all
           </Button>
         </Box>

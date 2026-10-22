@@ -10,6 +10,10 @@ import TableContainer from "@mui/material/TableContainer";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
+import SecurityIcon from "@mui/icons-material/Security";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
@@ -34,6 +38,7 @@ interface StaffTableProps {
   onView: (member: Staff) => void;
   onEdit: (member: Staff) => void;
   onDelete: (member: Staff) => void;
+  onManagePermissions: (member: Staff) => void;
 }
 
 const StaffTable = ({
@@ -45,15 +50,15 @@ const StaffTable = ({
   onView,
   onEdit,
   onDelete,
+  onManagePermissions,
 }: StaffTableProps) => {
-  const getInitials = (staffName: string) => {
-    return staffName
+  const getInitials = (staffName: string) =>
+    staffName
       .split(" ")
       .map((word) => word.charAt(0))
       .join("")
       .slice(0, 2)
       .toUpperCase();
-  };
 
   const getRoleChipSx = (staffRole: StaffRole) => {
     switch (staffRole) {
@@ -83,9 +88,7 @@ const StaffTable = ({
     }
   };
 
-  const getStatusChipSx = (
-    staffStatus: StaffStatus
-  ) => {
+  const getStatusChipSx = (staffStatus: StaffStatus) => {
     switch (staffStatus) {
       case "Active":
         return {
@@ -107,6 +110,22 @@ const StaffTable = ({
     }
   };
 
+  const handleView = () => {
+    if (menuMember) onView(menuMember);
+  };
+
+  const handleEdit = () => {
+    if (menuMember) onEdit(menuMember);
+  };
+
+  const handleManagePermissions = () => {
+    if (menuMember) onManagePermissions(menuMember);
+  };
+
+  const handleDelete = () => {
+    if (menuMember) onDelete(menuMember);
+  };
+
   return (
     <Paper
       variant="outlined"
@@ -119,92 +138,39 @@ const StaffTable = ({
       }}
     >
       <TableContainer sx={{ flex: 1 }}>
-        <Table
-          stickyHeader
-          sx={{ minWidth: 900 }}
-        >
+        <Table stickyHeader sx={{ minWidth: 900 }}>
           <TableHead>
             <TableRow>
-              <TableCell
-                sx={{
-                  typography: "caption",
-                  fontWeight: 600,
-                  color: "text.secondary",
-                  textTransform: "uppercase",
-                }}
-              >
-                Staff
-              </TableCell>
-
-              <TableCell
-                sx={{
-                  typography: "caption",
-                  fontWeight: 600,
-                  color: "text.secondary",
-                  textTransform: "uppercase",
-                }}
-              >
-                Contact
-              </TableCell>
-
-              <TableCell
-                sx={{
-                  typography: "caption",
-                  fontWeight: 600,
-                  color: "text.secondary",
-                  textTransform: "uppercase",
-                }}
-              >
-                Role
-              </TableCell>
-
-              <TableCell
-                sx={{
-                  typography: "caption",
-                  fontWeight: 600,
-                  color: "text.secondary",
-                  textTransform: "uppercase",
-                }}
-              >
-                Status
-              </TableCell>
-
-              <TableCell
-                sx={{
-                  typography: "caption",
-                  fontWeight: 600,
-                  color: "text.secondary",
-                  textTransform: "uppercase",
-                }}
-              >
-                Actions
-              </TableCell>
+              {["Staff", "Contact", "Role", "Status", "Actions"].map(
+                (heading) => (
+                  <TableCell
+                    key={heading}
+                    sx={{
+                      typography: "caption",
+                      fontWeight: 600,
+                      color: "text.secondary",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {heading}
+                  </TableCell>
+                )
+              )}
             </TableRow>
           </TableHead>
 
           <TableBody>
             {staff.length === 0 ? (
               <TableRow>
-                <TableCell
-                  colSpan={5}
-                  align="center"
-                  sx={{ py: 6 }}
-                >
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                  >
+                <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                  <Typography variant="body2" color="text.secondary">
                     No Staff found
                   </Typography>
                 </TableCell>
               </TableRow>
             ) : (
               staff.map((member) => (
-                <TableRow
-                  key={member.id}
-                  hover
-                >
-                  {/* Staff */}
+                <TableRow key={member.id} hover>
                   <TableCell>
                     <Box
                       sx={{
@@ -235,7 +201,6 @@ const StaffTable = ({
                         <Typography fontWeight={500}>
                           {member.name}
                         </Typography>
-
                         <Typography
                           variant="caption"
                           color="text.secondary"
@@ -246,25 +211,19 @@ const StaffTable = ({
                     </Box>
                   </TableCell>
 
-                  {/* Contact */}
                   <TableCell>
                     <Typography variant="body2">
                       {member.email}
                     </Typography>
-
                     <Typography
                       variant="caption"
                       color="text.secondary"
-                      sx={{
-                        display: "block",
-                        mt: 0.5,
-                      }}
+                      sx={{ display: "block", mt: 0.5 }}
                     >
                       {member.phone}
                     </Typography>
                   </TableCell>
 
-                  {/* Role */}
                   <TableCell>
                     <Chip
                       label={member.role}
@@ -273,7 +232,6 @@ const StaffTable = ({
                     />
                   </TableCell>
 
-                  {/* Status */}
                   <TableCell>
                     <Chip
                       label={member.status}
@@ -282,13 +240,11 @@ const StaffTable = ({
                     />
                   </TableCell>
 
-                  {/* Actions */}
                   <TableCell>
                     <IconButton
                       size="small"
-                      onClick={(event) => {
-                         onMenuOpen(event, member);
-                      }}
+                      aria-label={`Actions for ${member.name}`}
+                      onClick={(event) => onMenuOpen(event, member)}
                     >
                       <MoreHorizIcon />
                     </IconButton>
@@ -305,29 +261,24 @@ const StaffTable = ({
         open={Boolean(menuAnchorEl && menuMember)}
         onClose={onMenuClose}
       >
-        
-        <MenuItem onClick={() => {
-          if(menuMember) {
-            onView(menuMember);
-          }
-        }}>
-          View
+        <MenuItem onClick={handleView}>
+          <VisibilityIcon fontSize="small" sx={{ mr: 1.5 }} />
+          View Staff
         </MenuItem>
 
-        <MenuItem onClick={() => {
-          if(menuMember) {
-            onEdit(menuMember);
-          }
-        }}>
-          Edit
+        <MenuItem onClick={handleEdit}>
+          <EditIcon fontSize="small" sx={{ mr: 1.5 }} />
+          Edit Staff
         </MenuItem>
 
-        <MenuItem onClick={() => {
-          if(menuMember) {
-            onDelete(menuMember);
-          }
-        }}>
-          Delete
+        <MenuItem onClick={handleManagePermissions}>
+          <SecurityIcon fontSize="small" sx={{ mr: 1.5 }} />
+          Manage Role Permissions
+        </MenuItem>
+
+        <MenuItem onClick={handleDelete} sx={{ color: "error.main" }}>
+          <DeleteIcon fontSize="small" sx={{ mr: 1.5 }} />
+          Delete Staff
         </MenuItem>
       </Menu>
     </Paper>

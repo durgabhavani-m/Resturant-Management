@@ -1,35 +1,30 @@
-import type { FormEvent } from "react";
-
-import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import Grid from "@mui/material/Grid2";
-import IconButton from "@mui/material/IconButton";
-import MenuItem from "@mui/material/MenuItem";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
-import CloseIcon from "@mui/icons-material/Close";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  MenuItem,
+  TextField,
+  Typography,
+} from "@mui/material";
 
 import type { Reservation, ReservationStatus } from "../../types/reservation";
+import type { TimeSlot } from "../../context/TimeSlotContext";
 
-const getStatusColor = (
-  status: ReservationStatus
-): "success" | "warning" | "info" | "error" => {
-  if (status === "Confirmed") return "success";
-  if (status === "Pending") return "warning";
-  if (status === "Completed") return "info";
-  return "error";
-};
+interface SelectableTable {
+  id: string;
+  tableNumber: number;
+  section: string;
+  capacity: number;
+  status: string;
+}
 
 interface ReservationDialogsProps {
   showForm: boolean;
   editingReservation: Reservation | null;
   selectedReservation: Reservation | null;
+
   customerName: string;
   phone: string;
   date: string;
@@ -37,25 +32,55 @@ interface ReservationDialogsProps {
   guests: string;
   tableNumber: string;
   tableSection: string;
-  selectableTables: Array<{
-    id: string;
-    tableNumber: number;
-    section: string;
-    capacity: number;
-    status: string;
-  }>;
-  onCloseForm: () => void;
-  onCloseDetails: () => void;
+
+  selectableTables: SelectableTable[];
+  timeSlots: TimeSlot[];
+
   onCustomerNameChange: (value: string) => void;
   onPhoneChange: (value: string) => void;
   onDateChange: (value: string) => void;
   onTimeChange: (value: string) => void;
   onGuestsChange: (value: string) => void;
-  onTableChange: (tableSection: string, tableNumber: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onTableChange: (
+    nextTableSection: string,
+    nextTableNumber: string,
+  ) => void;
+
+  onCloseForm: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  onCloseDetails: () => void;
 }
 
-const ReservationDialogs = ({
+function formatTime(time: string): string {
+  const [hours, minutes] = time.split(":").map(Number);
+
+  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function getStatusColor(
+  status: ReservationStatus,
+): "success" | "warning" | "info" | "error" | "primary" | "default" {
+  switch (status) {
+    case "Confirmed":
+      return "success";
+    case "Pending":
+      return "warning";
+    case "Seated":
+      return "primary";
+    case "Completed":
+      return "info";
+    case "Cancelled":
+    case "No-show":
+      return "error";
+    default:
+      return "default";
+  }
+}
+
+export default function ReservationDialogs({
   showForm,
   editingReservation,
   selectedReservation,
@@ -67,300 +92,233 @@ const ReservationDialogs = ({
   tableNumber,
   tableSection,
   selectableTables,
-  onCloseForm,
-  onCloseDetails,
+  timeSlots,
   onCustomerNameChange,
   onPhoneChange,
   onDateChange,
   onTimeChange,
   onGuestsChange,
   onTableChange,
+  onCloseForm,
   onSubmit,
-}: ReservationDialogsProps) => {
+  onCloseDetails,
+}: ReservationDialogsProps) {
+  console.log("Dialog open:", showForm);
+console.log("Received time slots:", timeSlots);
+  const getTodayDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  };
+
   return (
     <>
-      <Dialog open={showForm} onClose={onCloseForm} maxWidth="sm" fullWidth>
-        <DialogTitle
-          sx={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 2,
-          }}
-        >
-          <Box>
-            <Typography variant="h2">
-              {editingReservation ? "Edit Reservation" : "Add Reservation"}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {editingReservation
-                ? "Update reservation information"
-                : "Create a new resturnat reservation"}
-            </Typography>
-          </Box>
-          <IconButton size="small" onClick={onCloseForm} aria-label="close">
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
+      {/* Add/Edit Reservation Dialog */}
+      <Dialog
+        open={showForm}
+        onClose={onCloseForm}
+        fullWidth
+        maxWidth="sm"
+      >
+        <form onSubmit={onSubmit}>
+          <DialogTitle>
+            {editingReservation ? "Edit Reservation" : "Add Reservation"}
+          </DialogTitle>
 
-        <Box component="form" onSubmit={onSubmit}>
-          <DialogContent
-            dividers
-            sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}
-          >
+          <DialogContent>
             <TextField
               label="Customer Name"
               fullWidth
               required
+              margin="normal"
               value={customerName}
-              placeholder="Enter customer name..."
-              onChange={(event) => onCustomerNameChange(event.target.value)}
+              onChange={(event) =>
+                onCustomerNameChange(event.target.value)
+              }
             />
 
             <TextField
-              label="Phone"
+              label="Phone Number"
               type="tel"
               fullWidth
               required
+              margin="normal"
               value={phone}
-              placeholder="Enter phone Number..."
-              onChange={(event) => onPhoneChange(event.target.value)}
+              inputProps={{
+                inputMode: "numeric",
+                maxLength: 10,
+                pattern: "[0-9]{10}",
+              }}
+              onChange={(event) => {
+                const digits = event.target.value
+                  .replace(/\D/g, "")
+                  .slice(0, 10);
+
+                onPhoneChange(digits);
+              }}
+              helperText="Enter exactly 10 digits"
             />
 
             <TextField
-              label="Date"
+              label="Reservation Date"
               type="date"
               fullWidth
               required
+              margin="normal"
               value={date}
+              inputProps={{ min: getTodayDate() }}
               onChange={(event) => onDateChange(event.target.value)}
               InputLabelProps={{ shrink: true }}
             />
 
             <TextField
-              label="Time"
-              type="time"
+              select
+              label="Time Slot"
               fullWidth
               required
+              margin="normal"
               value={time}
               onChange={(event) => onTimeChange(event.target.value)}
-              InputLabelProps={{ shrink: true }}
-            />
+              helperText="Choose an active reservation time slot"
+            >
+              {timeSlots.map((slot) => (
+                <MenuItem key={slot.id} value={slot.startTime}>
+                  {formatTime(slot.startTime)} – {formatTime(slot.endTime)}
+                </MenuItem>
+              ))}
+
+              {time &&
+                !timeSlots.some((slot) => slot.startTime === time) && (
+                  <MenuItem value={time}>
+                    {formatTime(time)} (existing reservation)
+                  </MenuItem>
+                )}
+            </TextField>
 
             <TextField
               label="Number of Guests"
               type="number"
               fullWidth
               required
-              inputProps={{ min: 1 }}
+              margin="normal"
               value={guests}
-              placeholder="Enter number of guests"
-              onChange={(event) => onGuestsChange(event.target.value)}
+              inputProps={{ min: 1, step: 1 }}
+              onChange={(event) =>
+                onGuestsChange(event.target.value)
+              }
             />
 
-            {selectableTables.length > 0 ? (
-              <TextField
-                select
-                label="Table Number"
-                fullWidth
-                required
-                value={
-                  tableNumber && tableSection ? `${tableSection}::${tableNumber}` : ""
+            <TextField
+              select
+              label="Table"
+              fullWidth
+              required
+              margin="normal"
+              value={
+                tableNumber && tableSection
+                  ? `${tableSection}::${tableNumber}`
+                  : ""
+              }
+              onChange={(event) => {
+                const [nextTableSection, nextTableNumber] = 
+                event.target.value.split("::");
+
+                if(nextTableSection && nextTableNumber){
+                  onTableChange(nextTableSection, nextTableNumber);
                 }
-                onChange={(event) => {
-                  const value = event.target.value;
-
-                  if (!value) {
-                    onTableChange("", "");
-                    return;
-                  }
-
-                  const [selectedSection, selectedNumber] = value.split("::");
-                  onTableChange(selectedSection, selectedNumber);
-                }}
-              >
-                <MenuItem value="">Select a table</MenuItem>
-                {selectableTables.map((table) => (
-                  <MenuItem
-                    key={table.id}
-                    value={`${table.section}::${table.tableNumber}`}
-                  >
-                    {table.section} · Table {table.tableNumber} · {table.capacity}{" "}
-                    seats · {table.status}
-                  </MenuItem>
-                ))}
-              </TextField>
-            ) : (
-              <Alert severity="warning">
-                No tables have capacity for {guests || 0} guests.
-              </Alert>
-            )}
+              }}
+            >
+              {selectableTables.map((table) => (
+                <MenuItem
+                  key={table.id}
+                  value={`${table.section}::${table.tableNumber}`}
+                >
+                  Table {table.tableNumber} — {table.section} (Capacity:{" "}
+                  {table.capacity})
+                </MenuItem>
+              ))}
+            </TextField>
           </DialogContent>
 
-          <DialogActions sx={{ px: 3, py: 2 }}>
-            <Button variant="outlined" color="inherit" onClick={onCloseForm}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="contained" color="primary">
-              {editingReservation ? "Update Reservation" : "Add Reservation"}
+          <DialogActions>
+            <Button onClick={onCloseForm}>Cancel</Button>
+            <Button type="submit" variant="contained">
+              {editingReservation ? "Save Changes" : "Add Reservation"}
             </Button>
           </DialogActions>
-        </Box>
+        </form>
       </Dialog>
 
+      {/* Reservation Details Dialog */}
       <Dialog
         open={Boolean(selectedReservation)}
         onClose={onCloseDetails}
-        maxWidth="sm"
         fullWidth
+        maxWidth="sm"
       >
-        <DialogTitle
-          sx={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 2,
-          }}
-        >
-          <Box>
-            <Typography variant="h2">Reservation Details</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Reservation information
-            </Typography>
-          </Box>
-          <IconButton
-            size="small"
-            onClick={onCloseDetails}
-            aria-label="close"
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
+        <DialogTitle>Reservation Details</DialogTitle>
 
-        {selectedReservation && (
-          <DialogContent dividers>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontWeight={600}
-                  sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}
-                >
-                  Customer
-                </Typography>
-                <Typography variant="body2" fontWeight={600} sx={{ mt: 0.5 }}>
-                  {selectedReservation.customerName}
-                </Typography>
-              </Box>
+        <DialogContent dividers>
+          {selectedReservation && (
+            <>
+              <Typography sx={{ mb: 1 }}>
+                <strong>Customer:</strong>{" "}
+                {selectedReservation.customerName}
+              </Typography>
 
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontWeight={600}
-                  sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}
-                >
-                  Phone
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 0.5 }}>
-                  {selectedReservation.phone}
-                </Typography>
-              </Box>
+              <Typography sx={{ mb: 1 }}>
+                <strong>Phone:</strong> {selectedReservation.phone}
+              </Typography>
 
-              <Grid container spacing={2.5}>
-                <Grid size={6}>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    fontWeight={600}
-                    sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}
-                  >
-                    Date
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    {selectedReservation.date}
-                  </Typography>
-                </Grid>
+              <Typography sx={{ mb: 1 }}>
+                <strong>Date:</strong> {selectedReservation.date}
+              </Typography>
 
-                <Grid size={6}>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    fontWeight={600}
-                    sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}
-                  >
-                    Time
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    {selectedReservation.time}
-                  </Typography>
-                </Grid>
+              <Typography sx={{ mb: 1 }}>
+                <strong>Time:</strong>{" "}
+                {(() => {
+                  const slot = timeSlots.find(
+                    (item) =>
+                      item.startTime === selectedReservation.time,
+                  );
 
-                <Grid size={6}>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    fontWeight={600}
-                    sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}
-                  >
-                    Guests
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    {selectedReservation.guests}
-                  </Typography>
-                </Grid>
+                  return slot
+                    ? `${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}`
+                    : formatTime(selectedReservation.time);
+                })()}
+              </Typography>
 
-                <Grid size={6}>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    fontWeight={600}
-                    sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}
-                  >
-                    Table
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    {selectedReservation.tableNumber
-                      ? `Table ${selectedReservation.tableNumber}`
-                      : "Not assigned"}
-                  </Typography>
-                </Grid>
-              </Grid>
+              <Typography sx={{ mb: 1 }}>
+                <strong>Guests:</strong> {selectedReservation.guests}
+              </Typography>
 
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontWeight={600}
-                  sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}
-                >
-                  Status
-                </Typography>
-                <Box sx={{ mt: 0.5 }}>
-                  <Chip
-                    label={selectedReservation.status}
-                    size="small"
-                    color={getStatusColor(selectedReservation.status)}
-                  />
-                </Box>
-              </Box>
-            </Box>
-          </DialogContent>
-        )}
+              <Typography sx={{ mb: 1 }}>
+                <strong>Table:</strong> {selectedReservation.tableNumber}
+              </Typography>
 
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={onCloseDetails}
-          >
-            Close
-          </Button>
+              <Typography sx={{ mb: 1 }}>
+                <strong>Section:</strong> {selectedReservation.tableSection}
+              </Typography>
+
+              <Typography sx={{ mb: 1 }}>
+                <strong>Status:</strong>{" "}
+                {selectedReservation.status}
+              </Typography>
+
+              <Typography color="text.secondary" variant="caption">
+                Status color: {getStatusColor(selectedReservation.status)}
+              </Typography>
+            </>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={onCloseDetails}>Close</Button>
         </DialogActions>
       </Dialog>
     </>
   );
-};
-
-export default ReservationDialogs;
+}

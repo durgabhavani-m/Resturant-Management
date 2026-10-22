@@ -1,13 +1,6 @@
-
-import Box from "@mui/material/Box";
-import Paper from "@mui/material/Paper";
-import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
-import IconButton from "@mui/material/IconButton";
-import Menu from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
-
+import { useEffect, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PeopleIcon from "@mui/icons-material/People";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
@@ -18,23 +11,39 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import SearchIcon from "@mui/icons-material/Search";
 import type { SvgIconComponent } from "@mui/icons-material";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import Select from "@mui/material/Select";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 
 import type { RestaurantTable, TableStatus } from "../../types/table";
 
 interface TableFloorProps {
   tables: RestaurantTable[];
   selectedSection: string;
+  sections: string[];
+  onSectionChange: (section: string) => void;
   openMenuId: string | null;
   menuAnchorEl: HTMLElement | null;
   onOpenTable: (table: RestaurantTable) => void;
   onViewTable: (table: RestaurantTable) => void;
   onEditTable: (table: RestaurantTable) => void;
   onDeleteTable: (tableId: string) => void;
-  onOpenMenu: (
-    tableId: string,
-    anchor: HTMLElement
-  ) => void;
+  onOpenMenu: (tableId: string, anchor: HTMLElement) => void;
   onCloseMenu: () => void;
+  onTablePositionChange: (
+    tableId: string,
+    x: number,
+    y: number
+  ) => void;
 }
 
 const getTableShape = (capacity: number) => {
@@ -104,15 +113,102 @@ const getStatusStyles = (
 const TableFloor = ({
   tables,
   selectedSection,
+  sections,
   openMenuId,
   menuAnchorEl,
   onOpenTable,
   onViewTable,
   onEditTable,
   onDeleteTable,
+  onSectionChange,
   onOpenMenu,
   onCloseMenu,
+  onTablePositionChange,
 }: TableFloorProps) => {
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  
+  const dragRef = useRef<{
+    tableId: string;
+    startMouseX: number;
+    startMouseY: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+  } | null>(null);
+
+  const suppressClickRef = useRef(false);
+
+  const [draggingTableId, setDraggingTableId] =
+    useState<string | null>(null);
+
+  const handleTableMouseDown = (
+    event: ReactMouseEvent<HTMLButtonElement>,
+    table: RestaurantTable,
+    index: number
+  ) => {
+    if (event.button !== 0) return;
+
+    // Do not start dragging when opening an order.
+    event.preventDefault();
+
+    const defaultX = 32 + (index % 3) * 250;
+    const defaultY = 32 + Math.floor(index / 3) * 210;
+
+    dragRef.current = {
+      tableId: table.id,
+      startMouseX: event.clientX,
+      startMouseY: event.clientY,
+      startX: table.x ?? defaultX,
+      startY: table.y ?? defaultY,
+      moved: false,
+    };
+
+    suppressClickRef.current = false;
+    setDraggingTableId(table.id);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+
+      const deltaX = event.clientX - drag.startMouseX;
+      const deltaY = event.clientY - drag.startMouseY;
+
+      if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+        drag.moved = true;
+      }
+
+      if (!drag.moved) return;
+
+      suppressClickRef.current = true;
+
+      onTablePositionChange(
+        drag.tableId,
+        Math.max(0, drag.startX + deltaX),
+        Math.max(0, drag.startY + deltaY)
+      );
+    };
+
+    const handleMouseUp = () => {
+      if (dragRef.current) {
+        suppressClickRef.current = dragRef.current.moved;
+      }
+
+      dragRef.current = null;
+      setDraggingTableId(null);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [onTablePositionChange]);
+
+
   const sectionTables = tables
     .filter((table) => table.section === selectedSection)
     .sort((a, b) => a.tableNumber - b.tableNumber);
@@ -125,50 +221,90 @@ const TableFloor = ({
       <Paper
         variant="outlined"
         sx={{
-          flex: 1,
+          position: isFullScreen ? "fixed" : "relative",
+          inset: isFullScreen ? 0 : "auto",
+          zIndex: isFullScreen ? 1300 : "auto",
+          width: isFullScreen ? "100vw" : "auto",
+          height: isFullScreen ? "100dvh" : "auto",
+          flex: isFullScreen ? "none" : 1,
           minHeight: 0,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          borderRadius: isFullScreen ? 0 : undefined,
+          bgcolor: "background.paper",
         }}
       >
+        {/* Floor header */}
         <Box
           sx={{
             display: "flex",
             flexDirection: { xs: "column", sm: "row" },
             alignItems: { sm: "center" },
             justifyContent: "space-between",
-            gap: 1.5,
+            gap: 2,
             px: 2.5,
             py: 2,
             borderBottom: 1,
             borderColor: "divider",
           }}
         >
-          <Box>
-            <Typography 
-            variant="h1"
-            sx={{ fontSize: "2rem", lineHeight: 1.2 }}
-            >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: { xs: "flex-start", lg: "flex-end" },
+              gap: 1.5,
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            {isFullScreen && (
+              <IconButton
+                aria-label="Back to tables page"
+                onClick={() => setIsFullScreen(false)}
+              >
+                <ArrowBackIcon />
+              </IconButton>
+            )}
+
+            <Box>
+              <Typography
+                variant="h1"
+                sx={{ fontSize: "2rem", lineHeight: 1.2 }}
+              >
                 Restaurant Floor
-            </Typography>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ mt: 0.5, display: "block" }}
-            >
-              Select a table to view details and manage its current state.
-            </Typography>
+              </Typography>
+
+              {!isFullScreen && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ mt: 0.5, display: "block" }}
+                >
+                  Select a table to view details and manage its current state.
+                </Typography>
+              )}
+            </Box>
           </Box>
 
           <Box
             sx={{
               display: "flex",
-              flexWrap: "wrap",
+              flexDirection: "column",
               alignItems: "center",
               gap: 1.5,
             }}
           >
+
+            <Box 
+            sx={{
+              display: "flex", 
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: { xs: "flex-start", lg: "flex-end" },
+              gap: { xs: 1.5, sm: 2 },
+            }}
+            >
             {[
               { label: "Available", color: "#10b981" },
               { label: "Occupied", color: "#ef4444" },
@@ -177,7 +313,11 @@ const TableFloor = ({
             ].map((item) => (
               <Box
                 key={item.label}
-                sx={{ display: "flex", alignItems: "center", gap: 0.75 }}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.75,
+                }}
               >
                 <Box
                   sx={{
@@ -185,19 +325,64 @@ const TableFloor = ({
                     height: 10,
                     borderRadius: "50%",
                     bgcolor: item.color,
+                    flexShrink: 0,
                   }}
                 />
                 <Typography variant="caption">{item.label}</Typography>
               </Box>
             ))}
+            </Box>
+
+            <Box
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: 1.5,
+              width: "100%",
+            }}
+            >
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel id="floor-section-label">Section</InputLabel>
+              <Select
+              labelId="floor-section-label"
+              value={selectedSection}
+              label="Section"
+              onChange={(event) => onSectionChange(event.target.value)}
+              >
+                {(sections ?? []).map((section) => (
+                  <MenuItem key={section} value={section}>
+                    {section}
+                    </MenuItem>
+                ))}
+                </Select>
+                </FormControl>
+
+                {!isFullScreen && (
+                <IconButton
+                aria-label="Open floor in full screen"
+                title="Full screen"
+                onClick={() => setIsFullScreen(true)}
+                sx={{
+                  border: 1,
+                  borderColor: "divider",
+                  borderRadius: 2,
+                  }}
+                  >
+                    <ArrowForwardIcon />
+                  </IconButton>
+                )}
+              </Box>
           </Box>
         </Box>
 
+        {/* Floor canvas */}
         <Box
           sx={{
             flex: 1,
             minHeight: 0,
-            overflowY: "auto",
+            overflow: "auto",
             bgcolor: "grey.50",
             p: { xs: 2, sm: 3 },
           }}
@@ -214,44 +399,62 @@ const TableFloor = ({
               }}
             >
               <SearchIcon
-                sx={{ fontSize: 40, color: "text.disabled", mb: 1.5 }}
+                sx={{
+                  fontSize: 40,
+                  color: "text.disabled",
+                  mb: 1.5,
+                }}
               />
+
               <Typography variant="subtitle2" fontWeight={600}>
                 No tables found
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 0.5 }}
+              >
                 Try selecting another section.
               </Typography>
             </Box>
           ) : (
             <Box
               sx={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                minHeight: 256,
-                borderRadius: 2,
-                border: "1px dashed",
-                borderColor: "divider",
-                bgcolor: "rgba(255,255,255,0.6)",
-                p: 3,
-              }}
-            >
-              {sectionTables.map((table) => {
+                 position: "relative",
+                 minWidth: 900,
+                 minHeight: 600,
+                 width: "100%",
+                 borderRadius: 2,
+                 border: isFullScreen ? 0 : "1px dashed",
+                 borderColor: "divider",
+                 bgcolor: isFullScreen
+                   ? "grey.50"
+                   : "rgba(255,255,255,0.6)",
+                 }}
+             >
+              {sectionTables.map((table, index) => {
                 const shape = getTableShape(table.capacity);
                 const styles = getStatusStyles(table.status);
                 const StatusIcon = styles.icon;
+
+                const defaultX = 32 + (index % 3) * 250;
+                const defaultY = 32 + Math.floor(index / 3) * 210;
 
                 return (
                   <Box
                     key={table.id}
                     sx={{
-                      position: "relative",
+                      position: "absolute",
+                      left: table.x ?? defaultX,
+                      top: table.y ?? defaultY,
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
+                      zIndex: draggingTableId === table.id ? 10 : 1,
+                      cursor:
+                         draggingTableId === table.id ? "grabbing" : "grab",
+                      userSelect: "none",
                     }}
                   >
                     <Box
@@ -271,7 +474,10 @@ const TableFloor = ({
                           if (openMenuId === table.id) {
                             onCloseMenu();
                           } else {
-                            onOpenMenu(table.id, event.currentTarget);
+                            onOpenMenu(
+                              table.id,
+                              event.currentTarget
+                            );
                           }
                         }}
                         sx={{
@@ -287,12 +493,17 @@ const TableFloor = ({
                     </Box>
 
                     <Button
-                      onClick={() => onOpenTable(table)}
-                      aria-label={
-                        table.status === "Cleaning"
-                          ? `View cleaning status for Table ${table.tableNumber}`
-                          : `Open order for Table ${table.tableNumber}`
+                      onMouseDown={(event) => 
+                        handleTableMouseDown(event, table, index)
                       }
+                      onClick={() => {
+                        if(suppressClickRef.current){
+                          suppressClickRef.current = false;
+                          return;
+                        }
+                        onOpenTable(table);
+                      }}
+                      aria-label={`Table ${table.tableNumber}, ${table.status}`}
                       sx={{
                         width: shape.width,
                         height: shape.height,
@@ -305,14 +516,13 @@ const TableFloor = ({
                         border: 2,
                         borderColor: styles.border,
                         bgcolor: "background.paper",
-                        boxShadow: 1,
+                        boxShadow: draggingTableId === table.id ? 4 : 1,
                         textTransform: "none",
                         color: "text.primary",
-                        transition: "transform 0.15s, box-shadow 0.15s",
+                        touchAction: "none",
                         "&:hover": {
-                          transform: "translateY(-4px)",
-                          boxShadow: 4,
-                          bgcolor: "background.paper",
+                        boxShadow: 3,
+                        bgcolor: "background.paper",
                         },
                       }}
                     >
@@ -350,7 +560,11 @@ const TableFloor = ({
                       </Box>
 
                       <Chip
-                        icon={<StatusIcon sx={{ fontSize: "11px !important" }} />}
+                        icon={
+                          <StatusIcon
+                            sx={{ fontSize: "11px !important" }}
+                          />
+                        }
                         label={table.status}
                         size="small"
                         sx={{
@@ -360,7 +574,9 @@ const TableFloor = ({
                           fontWeight: 600,
                           bgcolor: styles.bg,
                           color: styles.text,
-                          "& .MuiChip-icon": { color: styles.text },
+                          "& .MuiChip-icon": {
+                            color: styles.text,
+                          },
                         }}
                       />
                     </Button>
@@ -371,7 +587,8 @@ const TableFloor = ({
                       fontWeight={500}
                       sx={{ mt: 1.5 }}
                     >
-                      {table.capacity} seat{table.capacity !== 1 ? "s" : ""}
+                      {table.capacity} seat
+                      {table.capacity !== 1 ? "s" : ""}
                     </Typography>
                   </Box>
                 );
@@ -381,12 +598,19 @@ const TableFloor = ({
         </Box>
       </Paper>
 
+      {/* Table actions menu */}
       <Menu
         anchorEl={menuAnchorEl}
         open={Boolean(openMenuId) && Boolean(menuAnchorEl)}
         onClose={onCloseMenu}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "right",
+        }}
+        transformOrigin={{
+          vertical: "top",
+          horizontal: "right",
+        }}
       >
         <MenuItem
           onClick={() => {

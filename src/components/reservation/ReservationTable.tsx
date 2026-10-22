@@ -17,11 +17,22 @@ import type { Reservation, ReservationStatus } from "../../types/reservation";
 
 const getStatusColor = (
   status: ReservationStatus
-): "success" | "warning" | "info" | "error" => {
-  if (status === "Confirmed") return "success";
-  if (status === "Pending") return "warning";
-  if (status === "Completed") return "info";
-  return "error";
+): "success" | "warning" | "info" | "error" | "primary" | "default" => {
+  switch(status){
+    case "Confirmed":
+      return "success";
+    case "Pending":
+      return "warning";
+    case "Seated":
+      return "primary";
+    case "Completed":
+      return "info";
+    case "Cancelled":
+    case "No-show":
+      return "error";
+    default:
+      return "default";
+  }
 };
 
 interface ReservationTableProps {
@@ -29,12 +40,17 @@ interface ReservationTableProps {
   openMenuId: string | null;
   menuAnchorEl: HTMLElement | null;
   menuReservation: Reservation | null;
+
   onToggleMenu: (event: React.MouseEvent<HTMLElement>, reservationId: string) => void;
   onCloseMenu: () => void;
   onView: (reservation: Reservation) => void;
   onEdit: (reservation: Reservation) => void;
   onConfirm: (reservationId: string) => void;
   onCancel: (reservationId: string) => void;
+
+  onSeat?:(reservationId:string) => void;
+  onComplete?:(reservationId:string) => void;
+  onNoShow?: (reservationId:string) => void;
 }
 
 const ReservationTable = ({
@@ -48,7 +64,17 @@ const ReservationTable = ({
   onEdit,
   onConfirm,
   onCancel,
+  onSeat,
+  onComplete,
+  onNoShow,
 }: ReservationTableProps) => {
+  const isEditable = (status:ReservationStatus) =>
+    status === "Pending" || status === "Confirmed";
+
+  const runAction = (action: () => void) => {
+    action();
+    onCloseMenu();
+  }
   return (
     <Paper
       variant="outlined"
@@ -127,14 +153,13 @@ const ReservationTable = ({
                 <TableCell>
                   <IconButton
                     size="small"
-                    title="Actions"
+                    title="Reservation Actions"
                     onClick={(event) => {
                       if (openMenuId === item.id) {
                         onCloseMenu();
-                        return;
-                      }
-
-                      onToggleMenu(event, item.id);
+                      }else{
+                        onToggleMenu(event, item.id);
+                      }                  
                     }}
                   >
                     <MoreHorizIcon />
@@ -145,6 +170,14 @@ const ReservationTable = ({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {reservations.length === 0 && (
+        <Box sx={{py:6, textAlign: "center"}}>
+          <Typography variant="body2" color="text.secondary">
+            No reservation found.
+          </Typography>
+        </Box>
+      )}
 
       <Menu
         anchorEl={menuAnchorEl}
@@ -157,59 +190,81 @@ const ReservationTable = ({
           <>
 
           <MenuItem
-          onClick={() => {
-            onView(menuReservation);
-            onCloseMenu();
-          }}>
+          onClick={() => 
+            runAction(() => onView(menuReservation))     
+          }
+          >
             View Details
           </MenuItem>
 
-          {(menuReservation.status === "Pending" || 
-            menuReservation.status === "Confirmed") && (
-              <MenuItem
-              onClick={() => {
-                onEdit(menuReservation);
-                onCloseMenu();
-              }}>
-                Edit
-              </MenuItem>
-            )}
+          {isEditable(menuReservation.status) && (
+            <MenuItem 
+            onClick={() => 
+              runAction(() => onEdit(menuReservation))
+            }
+            >
+              Edit
+            </MenuItem>
+          )}
 
             {menuReservation.status === "Pending" && (
               <MenuItem
-              onClick={() => {
-                onConfirm(menuReservation.id);
-                onCloseMenu();
-              }}
+              onClick={() => 
+                runAction(() =>
+                onConfirm(menuReservation.id))
+              }
               sx={{color: "success.main"}}
               >
                 Confirm
               </MenuItem>
             )}
 
-            {(menuReservation.status === "Pending" || 
-              menuReservation.status === "Confirmed") && (
-                <MenuItem
-                onClick={() => {
-                  onCancel(menuReservation.id);
-                  onCloseMenu();
-                }}
-                sx={{color: "error.main"}}
-                >
-                  Cancel Reservation
-                </MenuItem>
-              )}
+            {menuReservation.status === "Confirmed" && onSeat && (
+              <MenuItem
+              onClick={() => 
+                runAction(() => onSeat(menuReservation.id))
+              }
+              sx={{color:"primary.main"}}
+              >
+                Mark as Seated
+              </MenuItem>
+            )}
+
+            {menuReservation.status === "Seated" && onComplete && (
+              <MenuItem 
+              onClick={() => 
+                runAction(() => onComplete(menuReservation.id))
+              }
+              sx={{color: "success.main"}}
+              >
+                Complete Reservation
+              </MenuItem>
+            )}
+
+            {menuReservation.status === "Confirmed" && onNoShow && (
+              <MenuItem
+              onClick={() => 
+                runAction(() => onNoShow(menuReservation.id))
+              }
+              sx={{color: "error.main"}}
+              >
+                Mark as No-show
+              </MenuItem>
+            )}
+
+            {isEditable(menuReservation.status) && (
+              <MenuItem
+              onClick={() => 
+                runAction(() => onCancel(menuReservation.id))
+              }
+              sx={{color: "error.main"}}
+              >
+                Cancel Reservation
+              </MenuItem>
+            )}
           </>
         )}
-      </Menu>
-
-      {reservations.length === 0 && (
-        <Box sx={{ py: 6, textAlign: "center" }}>
-          <Typography variant="body2" color="text.secondary">
-            No reservation found.
-          </Typography>
-        </Box>
-      )}
+      </Menu> 
     </Paper>
   );
 };

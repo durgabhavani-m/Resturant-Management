@@ -1,8 +1,10 @@
 export type ReservationStatus = 
 | "Pending"
 | "Confirmed"
+| "Seated"
 | "Completed"
 | "Cancelled"
+| "No-show";
 
 export interface Reservation {
     id : string;
